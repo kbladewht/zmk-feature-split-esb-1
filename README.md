@@ -4,11 +4,30 @@ Enhanced ShockBurst (2.4 GHz) split transport for ZMK. One peripheral, one centr
 Packet-native: one ESB packet = one split message; ESB hardware ACK + retransmit +
 CRC handle reliability.
 
-## Use
+## Install
 
-Add the module with `-DZMK_EXTRA_MODULES=<path>/zmk-feature-esb`. Needs `zmk`,
-`sdk-nrf` (`subsys/esb`) and `nrfxlib` (`sdk-nrf`'s Kconfig references it). Pin all
-three.
+Add it to your `config/west.yml`; `import: true` pulls the deps a vanilla ZMK
+workspace lacks (`zmk` and Zephyr come from your own manifest):
+```yaml
+  remotes:
+    - name: damex
+      url-base: https://github.com/damex
+  projects:
+    - name: zmk-feature-esb
+      remote: damex
+      revision: v0.1.1
+      import: true
+```
+Then update and apply the Kconfig fixes `sdk-nrf` needs on ZMK's Zephyr:
+```
+west update
+west patch -sm zmk-feature-esb apply
+```
+For a local checkout, build with `-DZMK_EXTRA_MODULES=<path>/zmk-feature-esb`
+instead; your workspace must then already provide `sdk-nrf` + `nrfxlib` with the
+patches applied.
+
+## Configure
 
 Board/shield conf, select ESB and drop the other transports:
 ```conf
