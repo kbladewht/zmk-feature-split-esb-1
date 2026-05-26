@@ -110,10 +110,14 @@ static void on_esb_event(const struct esb_evt *event) {
 #endif
         break;
     }
-    case ESB_EVENT_TX_FAILED:
+    case ESB_EVENT_TX_FAILED: {
         /* Retransmits exhausted: drop the packet, flush so the TX FIFO can advance. */
-        (void)esb_flush_tx();
+        int flush_error = esb_flush_tx();
+        if (flush_error) {
+            LOG_DBG("esb_flush_tx after TX_FAILED returned %d", flush_error);
+        }
         break;
+    }
     default:
         break; /* TX_SUCCESS and any other event: nothing to do */
     }
@@ -165,11 +169,26 @@ int esb_link_init(esb_link_rx_cb_t rx_cb) {
 
     uint8_t base_address_1[4] = {0};
     uint8_t prefixes[1] = {address_prefix};
-    (void)esb_set_base_address_0(base_address);
-    (void)esb_set_base_address_1(base_address_1);
-    (void)esb_set_prefixes(prefixes, ARRAY_SIZE(prefixes));
-    (void)esb_set_rf_channel(rf_channel);
-    (void)esb_set_tx_power(CONFIG_ZMK_ESB_TX_POWER_DBM);
+    int set_error = esb_set_base_address_0(base_address);
+    if (set_error) {
+        LOG_DBG("esb_set_base_address_0 returned %d", set_error);
+    }
+    set_error = esb_set_base_address_1(base_address_1);
+    if (set_error) {
+        LOG_DBG("esb_set_base_address_1 returned %d", set_error);
+    }
+    set_error = esb_set_prefixes(prefixes, ARRAY_SIZE(prefixes));
+    if (set_error) {
+        LOG_DBG("esb_set_prefixes returned %d", set_error);
+    }
+    set_error = esb_set_rf_channel(rf_channel);
+    if (set_error) {
+        LOG_DBG("esb_set_rf_channel returned %d", set_error);
+    }
+    set_error = esb_set_tx_power(CONFIG_ZMK_ESB_TX_POWER_DBM);
+    if (set_error) {
+        LOG_DBG("esb_set_tx_power returned %d", set_error);
+    }
 
     if (ESB_ROLE_MODE == ESB_MODE_PRX) {
         return esb_start_rx();
@@ -179,8 +198,14 @@ int esb_link_init(esb_link_rx_cb_t rx_cb) {
 
 int esb_link_set_enabled(bool enabled) {
     if (!enabled) {
-        (void)esb_stop_rx();
-        (void)esb_flush_tx();
+        int stop_error = esb_stop_rx();
+        if (stop_error) {
+            LOG_DBG("esb_stop_rx returned %d", stop_error);
+        }
+        int flush_error = esb_flush_tx();
+        if (flush_error) {
+            LOG_DBG("esb_flush_tx returned %d", flush_error);
+        }
         return 0;
     }
     return (ESB_ROLE_MODE == ESB_MODE_PRX) ? esb_start_rx() : 0;
