@@ -22,7 +22,7 @@
 LOG_MODULE_REGISTER(zmk_split_esb, CONFIG_ZMK_SPLIT_ESB_LOG_LEVEL);
 
 BUILD_ASSERT(DT_HAS_COMPAT_STATUS_OKAY(zmk_split_esb),
-             "a zmk,esb node (base-address/prefix/rf-channel) is required");
+             "a zmk,split-esb node (base-address/prefix/rf-channel) is required");
 
 static const uint8_t base_address[] = DT_INST_PROP(0, base_address);
 static const uint8_t address_prefix = DT_INST_PROP(0, prefix);
