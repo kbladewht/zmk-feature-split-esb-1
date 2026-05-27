@@ -127,9 +127,9 @@ static int hfclk_request(void) {
     struct onoff_manager *manager = z_nrf_clock_control_get_onoff(CLOCK_CONTROL_NRF_SUBSYS_HF);
     struct onoff_client client;
     sys_notify_init_spinwait(&client.notify);
-    int err = onoff_request(manager, &client);
-    if (err < 0) {
-        return err;
+    int error = onoff_request(manager, &client);
+    if (error < 0) {
+        return error;
     }
     int result;
     while (sys_notify_fetch_result(&client.notify, &result) == -EAGAIN) {
@@ -140,10 +140,10 @@ static int hfclk_request(void) {
 int esb_link_init(esb_link_rx_cb_t rx_cb) {
     rx_callback = rx_cb;
 
-    int err = hfclk_request();
-    if (err) {
-        LOG_ERR("HFCLK start failed (%d)", err);
-        return err;
+    int error = hfclk_request();
+    if (error) {
+        LOG_ERR("HFCLK start failed (%d)", error);
+        return error;
     }
 
     struct esb_config config = ESB_DEFAULT_CONFIG;
@@ -161,10 +161,10 @@ int esb_link_init(esb_link_rx_cb_t rx_cb) {
     config.selective_auto_ack = true;
     config.tx_mode = ESB_TXMODE_AUTO;
 
-    err = esb_init(&config);
-    if (err) {
-        LOG_ERR("esb_init failed (%d)", err);
-        return err;
+    error = esb_init(&config);
+    if (error) {
+        LOG_ERR("esb_init failed (%d)", error);
+        return error;
     }
 
     uint8_t base_address_1[4] = {0};
