@@ -65,16 +65,20 @@ static const struct zmk_split_transport_central_api central_api = {
 
 ZMK_SPLIT_TRANSPORT_CENTRAL_REGISTER(esb_central, &central_api, CONFIG_ZMK_SPLIT_ESB_PRIORITY);
 
-/* Runs in the esb_link work thread (not the radio ISR). */
+/* Runs in the esb_link dispatch thread (not the radio ISR). */
 static void central_on_rx(const uint8_t *data, size_t length) {
-    if (length != sizeof(struct zmk_split_transport_peripheral_event)) {
-        LOG_WRN("Dropping event with unexpected size %u", (unsigned int)length);
+    const size_t event_size = sizeof(struct zmk_split_transport_peripheral_event);
+    if (length == 0 || (length % event_size) != 0) {
+        LOG_WRN("Dropping packet with unexpected size %u", (unsigned int)length);
         return;
     }
-    struct zmk_split_transport_peripheral_event event;
-    memcpy(&event, data, sizeof(event));
-    zmk_split_transport_central_peripheral_event_handler(&esb_central, ESB_PERIPHERAL_SOURCE,
-                                                         event);
+    /* One packet may carry several coalesced events; replay each in order. */
+    for (size_t offset = 0; offset < length; offset += event_size) {
+        struct zmk_split_transport_peripheral_event event;
+        memcpy(&event, &data[offset], event_size);
+        zmk_split_transport_central_peripheral_event_handler(&esb_central, ESB_PERIPHERAL_SOURCE,
+                                                             event);
+    }
 }
 
 static int central_init(void) {

@@ -64,8 +64,49 @@ static bool event_wants_ack(const struct zmk_split_transport_peripheral_event *e
     return !input_is_lossy(event->data.input_event.type, event->data.input_event.code);
 }
 
+/* Coalesce one report's per-axis events into a single packet: ZMK forwards each
+ * axis as its own event (REL_X sync=0, REL_Y sync=1), doubling on-air packets at
+ * high rate. Buffer input events and flush on the sync event (the report
+ * boundary, us later, so no real latency added); non-input events flush the
+ * batch and go alone. Single context (the input thread), so no lock. */
+#define PERIPHERAL_BATCH_MAX                                                                       \
+    (CONFIG_ZMK_SPLIT_ESB_MAX_PAYLOAD / sizeof(struct zmk_split_transport_peripheral_event))
+BUILD_ASSERT(PERIPHERAL_BATCH_MAX >= 2,
+             "ZMK_SPLIT_ESB_MAX_PAYLOAD too small to coalesce a 2-axis sample; raise it");
+
+static struct zmk_split_transport_peripheral_event batch[PERIPHERAL_BATCH_MAX];
+static size_t batch_count;
+static bool batch_wants_ack;
+
+static int peripheral_flush_batch(void) {
+    if (batch_count == 0) {
+        return 0;
+    }
+    int error = esb_link_send((const uint8_t *)batch,
+                              batch_count * sizeof(struct zmk_split_transport_peripheral_event),
+                              batch_wants_ack);
+    batch_count = 0;
+    batch_wants_ack = false;
+    return error;
+}
+
 static int peripheral_report_event(const struct zmk_split_transport_peripheral_event *event) {
-    return esb_link_send((const uint8_t *)event, sizeof(*event), event_wants_ack(event));
+    if (event->type != ZMK_SPLIT_TRANSPORT_PERIPHERAL_EVENT_TYPE_INPUT_EVENT) {
+        int flush_error = peripheral_flush_batch();
+        if (flush_error < 0) {
+            return flush_error;
+        }
+        return esb_link_send((const uint8_t *)event, sizeof(*event), event_wants_ack(event));
+    }
+    batch[batch_count] = *event;
+    batch_count++;
+    if (event_wants_ack(event)) {
+        batch_wants_ack = true;
+    }
+    if (event->data.input_event.sync || batch_count >= PERIPHERAL_BATCH_MAX) {
+        return peripheral_flush_batch();
+    }
+    return 0;
 }
 
 static int peripheral_set_enabled(bool enabled) {
@@ -97,7 +138,7 @@ static const struct zmk_split_transport_peripheral_api peripheral_api = {
 
 ZMK_SPLIT_TRANSPORT_PERIPHERAL_REGISTER(esb_peripheral, &peripheral_api, CONFIG_ZMK_SPLIT_ESB_PRIORITY);
 
-/* Runs in the esb_link work thread (not the radio ISR). */
+/* Runs in the esb_link dispatch thread (not the radio ISR). */
 static void peripheral_on_rx(const uint8_t *data, size_t length) {
     if (length != sizeof(struct zmk_split_transport_central_command)) {
         LOG_WRN("Dropping command with unexpected size %u", (unsigned int)length);
