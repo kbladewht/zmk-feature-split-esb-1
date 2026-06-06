@@ -37,3 +37,19 @@ uint8_t hop_policy_index_next(uint8_t index, size_t count) {
     assert(count > 0);
     return (uint8_t)(((size_t)index + 1U) % count);
 }
+
+uint8_t hop_policy_channel_for_epoch(uint16_t epoch, size_t hop_count) {
+    assert(hop_count > 0);
+    return (uint8_t)(epoch % hop_count);
+}
+
+bool hop_policy_hop_vote(const uint8_t *link_loss, const uint8_t *weights, size_t count,
+                         uint16_t threshold) {
+    assert(link_loss != NULL);
+    assert(weights != NULL);
+    uint32_t weighted = 0;
+    for (size_t index = 0; index < count; index++) {
+        weighted += (uint32_t)link_loss[index] * weights[index];
+    }
+    return weighted >= threshold;
+}

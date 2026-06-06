@@ -22,3 +22,10 @@ bool hop_policy_marks_active(uint8_t length, uint8_t first_byte);
 bool hop_policy_is_keepalive(uint8_t length);
 
 uint8_t hop_policy_index_next(uint8_t index, size_t count);
+
+/* Both ends derive the same channel index from the central's epoch. */
+uint8_t hop_policy_channel_for_epoch(uint16_t epoch, size_t hop_count);
+
+/* Central hop decision: weighted sum of per-peripheral link loss, true at threshold. */
+bool hop_policy_hop_vote(const uint8_t *link_loss, const uint8_t *weights, size_t count,
+                         uint16_t threshold);

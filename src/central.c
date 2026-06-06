@@ -20,19 +20,15 @@ BUILD_ASSERT(sizeof(struct zmk_split_transport_peripheral_event) <= CONFIG_ZMK_S
 BUILD_ASSERT(sizeof(struct zmk_split_transport_central_command) <= CONFIG_ZMK_SPLIT_ESB_MAX_PAYLOAD,
              "central command does not fit in one ESB payload; raise ZMK_SPLIT_ESB_MAX_PAYLOAD");
 
-#define ESB_PERIPHERAL_SOURCE 0
-
 static bool transport_enabled;
 
 static int central_send_command(uint8_t source,
                                 struct zmk_split_transport_central_command command) {
-    ARG_UNUSED(source); /* single peripheral */
-    return esb_link_stage_reply((const uint8_t *)&command, sizeof(command));
+    return esb_link_stage_reply(source, (const uint8_t *)&command, sizeof(command));
 }
 
 static int central_get_available_source_ids(uint8_t *sources) {
-    sources[0] = ESB_PERIPHERAL_SOURCE;
-    return 1;
+    return esb_link_source_ids(sources);
 }
 
 static int central_set_enabled(bool enabled) {
@@ -66,7 +62,7 @@ static const struct zmk_split_transport_central_api central_api = {
 ZMK_SPLIT_TRANSPORT_CENTRAL_REGISTER(esb_central, &central_api, CONFIG_ZMK_SPLIT_ESB_PRIORITY);
 
 /* Runs in the esb_link dispatch thread (not the radio ISR). */
-static void central_on_rx(const uint8_t *data, size_t length) {
+static void central_on_rx(uint8_t pipe, const uint8_t *data, size_t length) {
     const size_t event_size = sizeof(struct zmk_split_transport_peripheral_event);
     if (length == 0 || (length % event_size) != 0) {
         LOG_WRN("Dropping packet with unexpected size %u", (unsigned int)length);
@@ -76,8 +72,7 @@ static void central_on_rx(const uint8_t *data, size_t length) {
     for (size_t offset = 0; offset < length; offset += event_size) {
         struct zmk_split_transport_peripheral_event event;
         memcpy(&event, &data[offset], event_size);
-        zmk_split_transport_central_peripheral_event_handler(&esb_central, ESB_PERIPHERAL_SOURCE,
-                                                             event);
+        zmk_split_transport_central_peripheral_event_handler(&esb_central, pipe, event);
     }
 }
 

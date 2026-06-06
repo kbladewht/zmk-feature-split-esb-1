@@ -55,3 +55,31 @@ ZTEST(hop_policy, test_index_next_wraps) {
     zassert_equal(hop_policy_index_next(2, 3), 0, "wraps at count");
     zassert_equal(hop_policy_index_next(0, 1), 0, "single channel stays put");
 }
+
+ZTEST(hop_policy, test_channel_for_epoch) {
+    zassert_equal(hop_policy_channel_for_epoch(0, 3), 0, NULL);
+    zassert_equal(hop_policy_channel_for_epoch(1, 3), 1, NULL);
+    zassert_equal(hop_policy_channel_for_epoch(3, 3), 0, "wraps");
+    zassert_equal(hop_policy_channel_for_epoch(7, 3), 1, NULL);
+    zassert_equal(hop_policy_channel_for_epoch(5, 1), 0, "single channel always 0");
+}
+
+ZTEST(hop_policy, test_hop_vote) {
+    const uint8_t weights[3] = {3, 1, 1};
+    const uint16_t threshold = 6;
+    uint8_t link_loss[3];
+
+    link_loss[0] = 0; link_loss[1] = 0; link_loss[2] = 0;
+    zassert_false(hop_policy_hop_vote(link_loss, weights, 3, threshold), "all good, no hop");
+
+    link_loss[0] = 2; link_loss[1] = 0; link_loss[2] = 0;
+    zassert_true(hop_policy_hop_vote(link_loss, weights, 3, threshold), "high-weight bad trips it");
+
+    link_loss[0] = 0; link_loss[1] = 5; link_loss[2] = 0;
+    zassert_false(hop_policy_hop_vote(link_loss, weights, 3, threshold),
+                  "one low-weight under threshold");
+
+    link_loss[0] = 0; link_loss[1] = 3; link_loss[2] = 3;
+    zassert_true(hop_policy_hop_vote(link_loss, weights, 3, threshold),
+                 "low-weight sum reaches threshold");
+}

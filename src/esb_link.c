@@ -24,10 +24,9 @@
 LOG_MODULE_REGISTER(zmk_split_esb, CONFIG_ZMK_SPLIT_ESB_LOG_LEVEL);
 
 BUILD_ASSERT(DT_HAS_COMPAT_STATUS_OKAY(zmk_split_esb),
-             "a zmk,split-esb node (base-address/prefix/hop-channels) is required");
+             "a zmk,split-esb node (base-address/peripherals/hop-channels) is required");
 
 static const uint8_t base_address[] = DT_INST_PROP(0, base_address);
-static const uint8_t address_prefix = DT_INST_PROP(0, prefix);
 static const int8_t tx_power_dbm = DT_INST_PROP(0, tx_power_dbm);
 static const uint16_t retransmit_count = DT_INST_PROP(0, retransmit_count);
 static const uint16_t retransmit_delay_us = DT_INST_PROP(0, retransmit_delay_us);
@@ -35,6 +34,18 @@ static const bool use_fast_ramp_up = DT_INST_PROP(0, use_fast_ramp_up);
 static const uint8_t crc_bits = DT_INST_PROP(0, crc_bits);
 static const uint16_t bitrate_kbps = DT_INST_PROP(0, bitrate_kbps);
 BUILD_ASSERT(sizeof(base_address) == 4, "base-address must be exactly 4 bytes");
+
+#define ESB_PERIPHERALS DT_INST_CHILD(0, peripherals)
+#define PERIPHERAL_PREFIX(node) [DT_PROP(node, pipe)] = DT_PROP(node, prefix),
+static const uint8_t peripheral_prefixes[] = {
+    DT_FOREACH_CHILD_STATUS_OKAY(ESB_PERIPHERALS, PERIPHERAL_PREFIX)
+};
+#define PERIPHERAL_COUNT ARRAY_SIZE(peripheral_prefixes)
+BUILD_ASSERT(PERIPHERAL_COUNT >= 1, "peripherals needs at least one entry");
+#if !IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
+BUILD_ASSERT(DT_HAS_CHOSEN(zmk_esb_self), "peripheral needs a chosen zmk,esb-self");
+static const uint8_t self_pipe = DT_PROP(DT_CHOSEN(zmk_esb_self), pipe);
+#endif
 
 static const uint8_t hop_channels[] = DT_INST_PROP(0, hop_channels);
 #define HOP_COUNT ARRAY_SIZE(hop_channels)
@@ -91,6 +102,7 @@ BUILD_ASSERT(CONFIG_ZMK_SPLIT_ESB_MAX_PAYLOAD <= CONFIG_ESB_MAX_PAYLOAD_LENGTH,
 #endif
 
 struct esb_link_packet {
+    uint8_t pipe;
     uint8_t length;
     uint8_t data[CONFIG_ZMK_SPLIT_ESB_MAX_PAYLOAD];
 };
@@ -125,7 +137,7 @@ static void rx_thread_fn(void *unused_a, void *unused_b, void *unused_c) {
         struct esb_link_packet *packet;
         while ((packet = spsc_consume(&rx_spsc)) != NULL) {
             if (rx_callback != NULL) {
-                rx_callback(packet->data, packet->length);
+                rx_callback(packet->pipe, packet->data, packet->length);
             }
             spsc_release(&rx_spsc);
         }
@@ -137,6 +149,15 @@ uint32_t esb_link_rx_dropped(void) {
 }
 
 #if IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
+/* Assumes peripheral pipes are contiguous from 0. */
+uint8_t esb_link_source_ids(uint8_t *out_ids) {
+    __ASSERT_NO_MSG(out_ids != NULL);
+    for (uint8_t pipe = 0; pipe < PERIPHERAL_COUNT; pipe++) {
+        out_ids[pipe] = pipe;
+    }
+    return (uint8_t)PERIPHERAL_COUNT;
+}
+
 /* Drain staged replies into the ACK FIFO so each rides the next ACK back to the
  * peripheral. Peek-then-remove keeps a reply queued if the ACK FIFO is full.
  * ISR-only, so esb_write_payload has a single caller context (no lock needed). */
@@ -144,7 +165,7 @@ static void stage_pending_replies(void) {
     struct esb_link_packet packet;
     while (k_msgq_peek(&reply_queue, &packet) == 0) {
         struct esb_payload payload = {0};
-        payload.pipe = 0;
+        payload.pipe = packet.pipe;
         payload.length = packet.length;
         memcpy(payload.data, packet.data, packet.length);
         if (esb_write_payload(&payload) != 0) {
@@ -192,7 +213,7 @@ static void keepalive_work_fn(struct k_work *work) {
     }
     bool active = atomic_set(&data_sent_since_tick, 0) != 0;
     struct esb_payload keepalive = {0};
-    keepalive.pipe = 0;
+    keepalive.pipe = self_pipe;
     keepalive.length = ESB_KEEPALIVE_LENGTH;
     keepalive.data[KEEPALIVE_RATE_OFFSET] = active ? KEEPALIVE_RATE_ACTIVE : KEEPALIVE_RATE_IDLE;
     (void)esb_write_payload(&keepalive);
@@ -223,6 +244,7 @@ static void on_esb_event(const struct esb_evt *event) {
                 atomic_inc(&rx_dropped);
                 continue; /* ring full; keep draining the radio FIFO */
             }
+            slot->pipe = payload.pipe;
             slot->length = (uint8_t)MIN(payload.length, (int)sizeof(slot->data));
             memcpy(slot->data, payload.data, slot->length);
             spsc_produce(&rx_spsc);
@@ -275,17 +297,15 @@ static int hfclk_request(void) {
  * set_* failures are logged and ignored; the radio starts on whatever
  * values it already held. */
 static int esb_link_radio_setup(void) {
-    uint8_t base_address_1[4] = {0};
-    uint8_t prefixes[1] = {address_prefix};
     int set_error = esb_set_base_address_0(base_address);
     if (set_error) {
         LOG_DBG("esb_set_base_address_0 returned %d", set_error);
     }
-    set_error = esb_set_base_address_1(base_address_1);
+    set_error = esb_set_base_address_1(base_address);
     if (set_error) {
         LOG_DBG("esb_set_base_address_1 returned %d", set_error);
     }
-    set_error = esb_set_prefixes(prefixes, ARRAY_SIZE(prefixes));
+    set_error = esb_set_prefixes(peripheral_prefixes, (uint8_t)PERIPHERAL_COUNT);
     if (set_error) {
         LOG_DBG("esb_set_prefixes returned %d", set_error);
     }
@@ -407,7 +427,7 @@ int esb_link_send(const uint8_t *data, size_t length, bool ack) {
         atomic_set(&data_sent_since_tick, 1); /* mark active so keepalive uses the fast rate */
     }
     struct esb_payload payload = {0};
-    payload.pipe = 0;
+    payload.pipe = self_pipe;
     payload.noack = !ack;
     payload.length = (uint8_t)length;
     memcpy(payload.data, data, length);
@@ -416,11 +436,12 @@ int esb_link_send(const uint8_t *data, size_t length, bool ack) {
 #endif
 
 #if IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
-int esb_link_stage_reply(const uint8_t *data, size_t length) {
+int esb_link_stage_reply(uint8_t pipe, const uint8_t *data, size_t length) {
     if (length > CONFIG_ZMK_SPLIT_ESB_MAX_PAYLOAD) {
         return -EMSGSIZE;
     }
     struct esb_link_packet packet;
+    packet.pipe = pipe;
     packet.length = (uint8_t)length;
     memcpy(packet.data, data, length);
     if (k_msgq_put(&reply_queue, &packet, K_NO_WAIT) != 0) {

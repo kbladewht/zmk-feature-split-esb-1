@@ -13,10 +13,10 @@
 
 /*
  * One received packet, handed up in a thread context (not the radio ISR):
- *   - central: an event transmitted by the peripheral.
- *   - peripheral: a command the central rode back on an ACK.
+ *   - central: an event from the peripheral on `pipe`.
+ *   - peripheral: a command the central rode back on an ACK (`pipe` is its own).
  */
-typedef void (*esb_link_rx_callback_t)(const uint8_t *data, size_t length);
+typedef void (*esb_link_rx_callback_t)(uint8_t pipe, const uint8_t *data, size_t length);
 
 /* Initialize the radio for this device's role; the central also starts listening. */
 int esb_link_init(esb_link_rx_callback_t callback);
@@ -33,7 +33,11 @@ int esb_link_send(const uint8_t *data, size_t length, bool ack);
 #endif
 
 #if defined(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
-/* Central only. Queue one packet to ride the next ACK back to the peripheral.
+/* Central only. Fill out_ids with the peripheral source ids (= pipe numbers).
+ * Returns the count. */
+uint8_t esb_link_source_ids(uint8_t *out_ids);
+
+/* Central only. Queue one packet to ride peripheral `pipe`'s next ACK back to it.
  * Returns -ENOBUFS if the reply queue is full. */
-int esb_link_stage_reply(const uint8_t *data, size_t length);
+int esb_link_stage_reply(uint8_t pipe, const uint8_t *data, size_t length);
 #endif

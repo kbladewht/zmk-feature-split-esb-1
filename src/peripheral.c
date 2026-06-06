@@ -139,7 +139,8 @@ static const struct zmk_split_transport_peripheral_api peripheral_api = {
 ZMK_SPLIT_TRANSPORT_PERIPHERAL_REGISTER(esb_peripheral, &peripheral_api, CONFIG_ZMK_SPLIT_ESB_PRIORITY);
 
 /* Runs in the esb_link dispatch thread (not the radio ISR). */
-static void peripheral_on_rx(const uint8_t *data, size_t length) {
+static void peripheral_on_rx(uint8_t pipe, const uint8_t *data, size_t length) {
+    ARG_UNUSED(pipe);
     if (length != sizeof(struct zmk_split_transport_central_command)) {
         LOG_WRN("Dropping command with unexpected size %u", (unsigned int)length);
         return;

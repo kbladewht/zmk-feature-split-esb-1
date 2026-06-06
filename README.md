@@ -41,18 +41,25 @@ Central also sets `CONFIG_ZMK_SPLIT_ROLE_CENTRAL=y`; peripheral leaves it unset.
 
 Same link identity in a dtsi included by both sides:
 ```dts
-esb_link: esb_link {
+esb_link {
     compatible = "zmk,split-esb";
     base-address = [E7 E7 E7 E7];
-    prefix = <0xC2>;
     hop-channels = [04];
+    peripherals {
+        mouse: peripheral_mouse {
+            pipe = <0>;
+            prefix = <0xE7>;
+            weight = <1>;
+        };
+    };
 };
 ```
+Each peripheral board points at its entry: `chosen { zmk,esb-self = &mouse; };`.
 
 | DT property | Value |
 |---|---|
-| `base-address` | 4-byte bytestring `[..]`, pipe 0 |
-| `prefix` | 1 byte, pipe 0 |
+| `base-address` | 4-byte bytestring `[..]`, shared by all pipes |
+| `peripherals` | one child node per device: `pipe`, `prefix` (1 byte), `weight` |
 | `hop-channels` | channel bytestring, each 0-100 (2400 + N MHz); 1 = fixed, 2+ = hopping set |
 | `hop-threshold` | peripheral failed keepalive windows before hopping (default 3) |
 | `hop-window-ms` | peripheral keepalive period while data flows (default 32) |

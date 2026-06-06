@@ -12,11 +12,7 @@ properties:
   base-address:
     type: uint8-array
     required: true
-    description: 4-byte ESB base address for pipe 0.
-  prefix:
-    type: int
-    required: true
-    description: 1-byte address prefix for pipe 0.
+    description: 4-byte ESB base address, shared by all pipes.
   hop-channels:
     type: uint8-array
     required: true
@@ -74,3 +70,21 @@ properties:
       (pointer motion); non-input split events (key-position, sensor, battery)
       are always ACK'd, and every other input event is ACK'd unless listed.
       Omit for fully lossless link.
+
+child-binding:
+  description: Peripheral table container.
+  child-binding:
+    description: One ESB peripheral.
+    properties:
+      pipe:
+        type: int
+        required: true
+        description: ESB pipe index, also the ZMK source id.
+      prefix:
+        type: int
+        required: true
+        description: 1-byte address prefix for this pipe.
+      weight:
+        type: int
+        default: 1
+        description: Relative priority for airtime throttling and hop vote.
