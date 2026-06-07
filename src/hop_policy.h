@@ -24,8 +24,15 @@ bool hop_policy_keepalive_is_active(uint8_t byte);
 #define HOP_POLICY_MAX_LOSS_PENALTY 4
 uint8_t hop_policy_loss_penalty(int8_t rssi_dbm, int8_t floor_dbm);
 
-/* Returns true and clears the streak after threshold consecutive failures. */
-bool hop_policy_should_hop(uint8_t *bad_windows, bool window_failed, uint16_t threshold);
+/* Accumulate a graded sweep penalty, returning true and clearing the streak once it
+ * reaches threshold. A zero penalty (clean window) resets the streak. */
+bool hop_policy_should_hop(uint8_t *bad_windows, uint8_t penalty, uint16_t threshold);
+
+/* Graded sweep penalty from a transmit's retransmit count: zero up to good_attempts, then
+ * one point per HOP_POLICY_TX_ATTEMPTS_GRADE_STEP over it, capped at HOP_POLICY_MAX_LOSS_PENALTY. */
+#define HOP_POLICY_GOOD_TX_ATTEMPTS 2
+#define HOP_POLICY_TX_ATTEMPTS_GRADE_STEP 4
+uint8_t hop_policy_attempts_penalty(uint8_t attempts, uint8_t good_attempts);
 
 bool hop_policy_is_keepalive(uint8_t length);
 

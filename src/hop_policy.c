@@ -8,18 +8,34 @@
 
 #include "hop_policy.h"
 
-bool hop_policy_should_hop(uint8_t *bad_windows, bool window_failed, uint16_t threshold) {
+bool hop_policy_should_hop(uint8_t *bad_windows, uint8_t penalty, uint16_t threshold) {
     assert(bad_windows != NULL);
-    if (window_failed) {
-        (*bad_windows)++;
-    } else {
+    if (penalty == 0) {
         *bad_windows = 0;
+        return false;
+    }
+    if (*bad_windows > UINT8_MAX - penalty) {
+        *bad_windows = UINT8_MAX;
+    } else {
+        *bad_windows = (uint8_t)(*bad_windows + penalty);
     }
     if (*bad_windows >= threshold) {
         *bad_windows = 0;
         return true;
     }
     return false;
+}
+
+uint8_t hop_policy_attempts_penalty(uint8_t attempts, uint8_t good_attempts) {
+    if (attempts <= good_attempts) {
+        return 0;
+    }
+    int over = (int)attempts - (int)good_attempts;
+    int penalty = 1 + over / HOP_POLICY_TX_ATTEMPTS_GRADE_STEP;
+    if (penalty > HOP_POLICY_MAX_LOSS_PENALTY) {
+        penalty = HOP_POLICY_MAX_LOSS_PENALTY;
+    }
+    return (uint8_t)penalty;
 }
 
 bool hop_policy_is_keepalive(uint8_t length) {

@@ -190,6 +190,9 @@ static void on_esb_event(const struct esb_evt *event) {
 #endif
         break;
     }
+    case ESB_EVENT_TX_SUCCESS:
+        hop_note_tx_success((uint8_t)event->tx_attempts);
+        break;
     case ESB_EVENT_TX_FAILED: {
         /* Retransmits exhausted: drop the packet, flush so the TX FIFO can advance. */
         int flush_error = esb_flush_tx();

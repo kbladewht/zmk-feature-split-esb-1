@@ -25,6 +25,9 @@ void hop_stop(void);
  * central, an epoch beacon on a peripheral. */
 bool hop_consume_rx(uint8_t pipe, const uint8_t *data, uint8_t length, int8_t rssi);
 
+/* Peripheral: an acked transmit succeeded after this many attempts (1 = first try). */
+void hop_note_tx_success(uint8_t attempts);
+
 /* Peripheral: a transmit exhausted its retransmits this window. */
 void hop_note_tx_failed(void);
 

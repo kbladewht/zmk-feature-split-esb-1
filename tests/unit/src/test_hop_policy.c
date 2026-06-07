@@ -13,25 +13,42 @@ ZTEST_SUITE(hop_policy, NULL, NULL, NULL, NULL, NULL);
 ZTEST(hop_policy, test_should_hop_threshold) {
     uint8_t bad_windows = 0;
     const uint16_t threshold = 3;
-    zassert_false(hop_policy_should_hop(&bad_windows, true, threshold), "1 of 3");
-    zassert_false(hop_policy_should_hop(&bad_windows, true, threshold), "2 of 3");
-    zassert_true(hop_policy_should_hop(&bad_windows, true, threshold), "3rd consecutive hops");
+    zassert_false(hop_policy_should_hop(&bad_windows, 1, threshold), "1 of 3");
+    zassert_false(hop_policy_should_hop(&bad_windows, 1, threshold), "2 of 3");
+    zassert_true(hop_policy_should_hop(&bad_windows, 1, threshold), "3rd consecutive hops");
     zassert_equal(bad_windows, 0, "streak clears after hop");
 }
 
 ZTEST(hop_policy, test_should_hop_good_window_resets) {
     uint8_t bad_windows = 0;
     const uint16_t threshold = 3;
-    hop_policy_should_hop(&bad_windows, true, threshold);
-    hop_policy_should_hop(&bad_windows, true, threshold);
-    zassert_false(hop_policy_should_hop(&bad_windows, false, threshold), "good window, no hop");
+    hop_policy_should_hop(&bad_windows, 1, threshold);
+    hop_policy_should_hop(&bad_windows, 1, threshold);
+    zassert_false(hop_policy_should_hop(&bad_windows, 0, threshold), "good window, no hop");
     zassert_equal(bad_windows, 0, "good window clears the streak");
-    zassert_false(hop_policy_should_hop(&bad_windows, true, threshold), "streak restarts from 0");
+    zassert_false(hop_policy_should_hop(&bad_windows, 1, threshold), "streak restarts from 0");
 }
 
 ZTEST(hop_policy, test_should_hop_threshold_one) {
     uint8_t bad_windows = 0;
-    zassert_true(hop_policy_should_hop(&bad_windows, true, 1), "threshold 1 hops on first fail");
+    zassert_true(hop_policy_should_hop(&bad_windows, 1, 1), "threshold 1 hops on first fail");
+}
+
+ZTEST(hop_policy, test_should_hop_graded) {
+    uint8_t bad_windows = 0;
+    /* a big penalty reaches the threshold in one window */
+    zassert_true(hop_policy_should_hop(&bad_windows, 4, 3), "penalty over threshold hops at once");
+    zassert_equal(bad_windows, 0, "clears after hop");
+}
+
+ZTEST(hop_policy, test_attempts_penalty) {
+    const uint8_t good = 2;
+    zassert_equal(hop_policy_attempts_penalty(1, good), 0, "first try: no penalty");
+    zassert_equal(hop_policy_attempts_penalty(2, good), 0, "at good limit: no penalty");
+    zassert_equal(hop_policy_attempts_penalty(3, good), 1, "just over: 1");
+    zassert_equal(hop_policy_attempts_penalty(6, good), 2, "4 over: 2");
+    zassert_equal(hop_policy_attempts_penalty(14, good), HOP_POLICY_MAX_LOSS_PENALTY, "many: capped");
+    zassert_equal(hop_policy_attempts_penalty(255, good), HOP_POLICY_MAX_LOSS_PENALTY, "lost: capped");
 }
 
 ZTEST(hop_policy, test_is_keepalive) {
