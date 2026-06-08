@@ -98,8 +98,6 @@ Tunables (Kconfig, defaults shown):
 | `ZMK_SPLIT_ESB_RX_THREAD_STACK_SIZE` | 1536 | RX dispatch thread stack |
 | `ZMK_SPLIT_ESB_RX_THREAD_PRIORITY` | 2 | RX dispatch thread priority |
 | `ZMK_SPLIT_ESB_REPLY_QUEUE_SIZE` | 8 | central reverse-channel queue depth |
-| `ZMK_SPLIT_ESB_TX_FIFO_SIZE` | 8 | radio TX FIFO depth |
-| `ZMK_SPLIT_ESB_RX_FIFO_SIZE` | 8 | radio RX FIFO depth |
 | `ZMK_SPLIT_ESB_PRIORITY` | 50 | transport registration priority |
 
 ## Channel hopping
