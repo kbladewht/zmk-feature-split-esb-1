@@ -8,17 +8,35 @@
 
 #include "esb_wire.h"
 
+/* Tight wire layout for the high-rate input event: ZMK's struct pads it to 12 bytes
+ * (uint16 code on a 2-byte boundary, int32 value on a 4-byte boundary), the union's
+ * widest member. Packing the five fields drops it to 9, so a coalesced 2-axis motion
+ * packet is 20 bytes on air instead of 26. */
+struct __packed input_wire {
+    uint8_t reg;
+    uint8_t sync;
+    uint8_t type;
+    uint16_t code;
+    int32_t value;
+};
+BUILD_ASSERT(sizeof(struct input_wire) == 9, "input wire layout drifted");
+
 #define WIRE_PAYLOAD(member)                                                                       \
     (uint8_t)sizeof(((struct zmk_split_transport_peripheral_event *)0)->data.member)
 
-/* Union payload size per event type, direct-indexed (the type enum is dense from 0).
+/* On-air payload size per event type, direct-indexed (the type enum is dense from 0).
+ * Input is the packed size, the others copy their union member verbatim.
  * A zero slot marks an unknown tag for the decoder. */
 static const uint8_t payload_size[] = {
     [ZMK_SPLIT_TRANSPORT_PERIPHERAL_EVENT_TYPE_KEY_POSITION_EVENT] = WIRE_PAYLOAD(key_position_event),
     [ZMK_SPLIT_TRANSPORT_PERIPHERAL_EVENT_TYPE_SENSOR_EVENT] = WIRE_PAYLOAD(sensor_event),
-    [ZMK_SPLIT_TRANSPORT_PERIPHERAL_EVENT_TYPE_INPUT_EVENT] = WIRE_PAYLOAD(input_event),
+    [ZMK_SPLIT_TRANSPORT_PERIPHERAL_EVENT_TYPE_INPUT_EVENT] = sizeof(struct input_wire),
     [ZMK_SPLIT_TRANSPORT_PERIPHERAL_EVENT_TYPE_BATTERY_EVENT] = WIRE_PAYLOAD(battery_event),
 };
+
+static bool is_input(uint8_t type) {
+    return type == ZMK_SPLIT_TRANSPORT_PERIPHERAL_EVENT_TYPE_INPUT_EVENT;
+}
 
 size_t esb_wire_encode_event(uint8_t *out, size_t out_cap,
                              const struct zmk_split_transport_peripheral_event *event) {
@@ -30,7 +48,18 @@ size_t esb_wire_encode_event(uint8_t *out, size_t out_cap,
         return 0;
     }
     out[0] = type;
-    memcpy(&out[1], &event->data, size);
+    if (is_input(type)) {
+        struct input_wire wire = {
+            .reg = event->data.input_event.reg,
+            .sync = event->data.input_event.sync,
+            .type = event->data.input_event.type,
+            .code = event->data.input_event.code,
+            .value = event->data.input_event.value,
+        };
+        memcpy(&out[1], &wire, sizeof(wire));
+    } else {
+        memcpy(&out[1], &event->data, size);
+    }
     return (size_t)(1 + size);
 }
 
@@ -51,6 +80,16 @@ size_t esb_wire_decode_event(const uint8_t *in, size_t avail,
     }
     *event = (struct zmk_split_transport_peripheral_event){0};
     event->type = (enum zmk_split_transport_peripheral_event_type)type;
-    memcpy(&event->data, &in[1], size);
+    if (is_input(type)) {
+        struct input_wire wire;
+        memcpy(&wire, &in[1], sizeof(wire));
+        event->data.input_event.reg = wire.reg;
+        event->data.input_event.sync = wire.sync;
+        event->data.input_event.type = wire.type;
+        event->data.input_event.code = wire.code;
+        event->data.input_event.value = wire.value;
+    } else {
+        memcpy(&event->data, &in[1], size);
+    }
     return (size_t)(1 + size);
 }

@@ -3,10 +3,9 @@
 
 /*
  * Compact on-air encoding for split peripheral events.
- * One event becomes a 1-byte type tag plus only that type's union payload, dropping
- * the 3-byte gap from ZMK's unpacked event-type enum and the unused union tail (the
- * sensor member is widest, motion only needs input_event).
- * A coalesced 2-axis motion packet shrinks from 34 to 20 bytes on air.
+ * One event becomes a 1-byte type tag plus a tight payload. The input event (the
+ * high-rate path) is field-packed to drop ZMK's struct padding, 13 bytes to 10, so a
+ * coalesced 2-axis motion packet shrinks from 26 to 20 bytes on air.
  */
 #pragma once
 
