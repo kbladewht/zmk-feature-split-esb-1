@@ -24,9 +24,6 @@ int esb_link_init(esb_link_rx_callback_t callback);
 
 int esb_link_set_enabled(bool enabled);
 
-/* Diagnostic count of received packets dropped because the RX ring was full. */
-uint32_t esb_link_rx_dropped(void);
-
 #if !defined(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
 /* Peripheral only.
  * Send one packet. ack == false is fire-and-forget: no ACK, so no reverse-channel

@@ -100,7 +100,6 @@ struct esb_link_packet {
  * requires. */
 SPSC_DEFINE(rx_spsc, struct esb_link_packet, CONFIG_ZMK_SPLIT_ESB_RX_QUEUE_SIZE);
 static K_SEM_DEFINE(rx_sem, 0, 1);
-static atomic_t rx_dropped;
 static K_THREAD_STACK_DEFINE(rx_thread_stack, CONFIG_ZMK_SPLIT_ESB_RX_THREAD_STACK_SIZE);
 static struct k_thread rx_thread;
 
@@ -128,10 +127,6 @@ static void rx_thread_fn(void *unused_a, void *unused_b, void *unused_c) {
             spsc_release(&rx_spsc);
         }
     }
-}
-
-uint32_t esb_link_rx_dropped(void) {
-    return (uint32_t)atomic_get(&rx_dropped);
 }
 
 #if IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
@@ -174,8 +169,8 @@ static void on_esb_event(const struct esb_evt *event) {
             }
             struct esb_link_packet *slot = spsc_acquire(&rx_spsc);
             if (slot == NULL) {
-                atomic_inc(&rx_dropped);
-                continue; /* ring full, keep draining the radio FIFO */
+                LOG_DBG("RX ring full, dropping packet");
+                continue; /* keep draining the radio FIFO */
             }
             slot->pipe = payload.pipe;
             slot->length = (uint8_t)MIN(payload.length, (int)sizeof(slot->data));
