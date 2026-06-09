@@ -62,7 +62,10 @@ esb_link {
 };
 ```
 Each peripheral board points at its entry: `chosen { zmk,esb-self = &mouse; };`.
-More peripherals: add another child, each with the next `pipe` (1, 2, ...) and a unique `prefix`.
+
+More peripherals: add another child with next `pipe` (1, 2, ...) and unique `prefix`.
+`pipe` is the ZMK source id. Central tags each peripheral's events with it: on the
+central add one `zmk,input-split` (`reg` = pipe) per peripheral, enable its listener.
 
 | DT property | Value |
 |---|---|
