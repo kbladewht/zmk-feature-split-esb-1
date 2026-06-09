@@ -46,6 +46,10 @@ bool hop_policy_keepalive_is_active(uint8_t byte) {
     return byte == ESB_KEEPALIVE_ACTIVE;
 }
 
+int8_t hop_policy_rssi_to_dbm(int8_t rssi_magnitude) {
+    return (int8_t)(-rssi_magnitude);
+}
+
 uint8_t hop_policy_loss_penalty(int8_t rssi_dbm, int8_t floor_dbm) {
     if (rssi_dbm >= floor_dbm) {
         return 0;

@@ -17,6 +17,9 @@
 /* True when a keepalive byte reports the peripheral is actively polling. */
 bool hop_policy_keepalive_is_active(uint8_t byte);
 
+/* ESB RSSI is a positive magnitude, dBm is its negative. */
+int8_t hop_policy_rssi_to_dbm(int8_t rssi_magnitude);
+
 /* Graded per-window loss for one pipe from its motion RSSI (dBm, negative).
  * Zero at or above the floor, then one point per HOP_POLICY_RSSI_GRADE_STEP_DB below it,
  * capped at HOP_POLICY_MAX_LOSS_PENALTY, so a weaker signal reaches the hop threshold sooner. */

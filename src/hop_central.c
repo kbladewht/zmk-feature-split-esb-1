@@ -10,6 +10,8 @@
 #include <zephyr/kernel.h>
 #include <zephyr/sys/util.h>
 
+#include <zmk_split_esb.h>
+
 #include "esb_link.h"
 #include "hop.h"
 #include "hop_internal.h"
@@ -126,10 +128,9 @@ bool hop_consume_rx(uint8_t pipe, const uint8_t *data, uint8_t length, int8_t rs
             }
         } else {
             atomic_or(&pipe_active_mask, BIT(pipe));
-            /* Negated ESB magnitude is the dBm value, graded into loss at the decision tick.
-             * Store it before the motion bit: the decision tick reads pipe_rssi only when
-             * that bit is set, so the value must be published first. */
-            pipe_rssi[pipe] = (int8_t)(-rssi);
+            /* Store before the motion bit: the decision tick reads pipe_rssi only when
+             * that bit is set, so publish the value first. */
+            pipe_rssi[pipe] = hop_policy_rssi_to_dbm(rssi);
             atomic_or(&pipe_motion_mask, BIT(pipe));
         }
     }
@@ -145,4 +146,12 @@ void hop_note_tx_failed(void) {
 }
 
 void hop_note_data_sent(void) {
+}
+
+void zmk_split_esb_get_status(struct zmk_split_esb_status *status) {
+    __ASSERT_NO_MSG(status != NULL);
+    status->channel = hop_current_channel();
+    status->epoch = hop_epoch;
+    status->searching = silent_run > 0;
+    status->rssi_dbm = pipe_rssi[0];
 }

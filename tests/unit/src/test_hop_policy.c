@@ -114,6 +114,12 @@ ZTEST(hop_policy, test_accrue_loss) {
     zassert_equal(sat[0], UINT8_MAX, "loss saturates, no wrap");
 }
 
+ZTEST(hop_policy, test_rssi_to_dbm) {
+    zassert_equal(hop_policy_rssi_to_dbm(42), -42, "magnitude to negative dBm");
+    zassert_equal(hop_policy_rssi_to_dbm(0), 0, "zero stays zero");
+    zassert_equal(hop_policy_rssi_to_dbm(95), -95, NULL);
+}
+
 ZTEST(hop_policy, test_keepalive_is_active) {
     zassert_true(hop_policy_keepalive_is_active(ESB_KEEPALIVE_ACTIVE), "active byte");
     zassert_false(hop_policy_keepalive_is_active(ESB_KEEPALIVE_IDLE), "idle byte");

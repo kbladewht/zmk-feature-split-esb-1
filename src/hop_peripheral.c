@@ -10,6 +10,8 @@
 #include <zephyr/kernel.h>
 #include <zephyr/sys/util.h>
 
+#include <zmk_split_esb.h>
+
 #include "esb_link.h"
 #include "hop.h"
 #include "hop_internal.h"
@@ -23,6 +25,7 @@ static atomic_t data_sent_since_tick;
 static atomic_t beacon_epoch;  /* latest epoch from the central, set in the ISR */
 static uint8_t bad_windows;    /* keepalive_work only, sweep streak */
 static uint8_t adopted_epoch;  /* keepalive_work only */
+static int8_t last_rssi_dbm;   /* downlink dBm, ISR-written */
 
 /* Adopt the central's channel when its beacon epoch changes.
  * Otherwise sweep the table on a TX-fail streak to re-find where the central hopped.
@@ -67,7 +70,7 @@ void hop_stop(void) {
 
 bool hop_consume_rx(uint8_t pipe, const uint8_t *data, uint8_t length, int8_t rssi) {
     ARG_UNUSED(pipe);
-    ARG_UNUSED(rssi);
+    last_rssi_dbm = hop_policy_rssi_to_dbm(rssi);
     if (HOP_COUNT <= 1) {
         return false;
     }
@@ -100,4 +103,12 @@ void hop_note_data_sent(void) {
     if (HOP_COUNT > 1) {
         atomic_set(&data_sent_since_tick, 1);
     }
+}
+
+void zmk_split_esb_get_status(struct zmk_split_esb_status *status) {
+    __ASSERT_NO_MSG(status != NULL);
+    status->channel = hop_current_channel();
+    status->epoch = adopted_epoch;
+    status->searching = bad_windows > 0;
+    status->rssi_dbm = last_rssi_dbm;
 }

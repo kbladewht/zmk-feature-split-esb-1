@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 if(CONFIG_ZMK_SPLIT_ESB)
+  zephyr_include_directories(include)
   zephyr_library()
   zephyr_library_compile_options(
       -Werror
