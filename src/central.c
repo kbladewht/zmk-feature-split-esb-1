@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 /*
- * ZMK ESB split central. One peripheral, so the source id is a fixed constant.
+ * ZMK ESB split central. Source id = ESB pipe.
  */
 #include <zephyr/init.h>
 #include <zephyr/kernel.h>
