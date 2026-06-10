@@ -74,8 +74,9 @@ bool hop_consume_rx(uint8_t pipe, const uint8_t *data, uint8_t length, int8_t rs
     if (HOP_COUNT <= 1) {
         return false;
     }
-    if (length == ESB_KEEPALIVE_LENGTH) {
-        atomic_set(&beacon_epoch, data[0]); /* epoch beacon: adopted in keepalive_work, not queued */
+    if (hop_policy_is_keepalive(length)) {
+        uint8_t epoch = data[0];
+        atomic_set(&beacon_epoch, epoch); /* adopted in keepalive_work, not queued */
         return true;
     }
     return false;

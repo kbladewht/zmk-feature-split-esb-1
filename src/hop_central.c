@@ -128,7 +128,8 @@ bool hop_consume_rx(uint8_t pipe, const uint8_t *data, uint8_t length, int8_t rs
     if (pipe < PERIPHERAL_COUNT) {
         atomic_or(&pipe_heard_mask, BIT(pipe));
         if (keepalive) {
-            if (hop_policy_keepalive_is_active(data[0])) {
+            uint8_t keepalive_state = data[0];
+            if (hop_policy_keepalive_is_active(keepalive_state)) {
                 atomic_or(&pipe_active_mask, BIT(pipe));
             }
         } else {
