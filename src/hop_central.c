@@ -116,10 +116,15 @@ void hop_stop(void) {
 }
 
 bool hop_consume_rx(uint8_t pipe, const uint8_t *data, uint8_t length, int8_t rssi) {
+    bool keepalive = hop_policy_is_keepalive(length);
+    if (pipe < PERIPHERAL_COUNT && !keepalive) {
+        /* Store before the motion bit: the decision tick reads pipe_rssi_dbm only when
+         * that bit is set, so publish the value first. */
+        pipe_rssi_dbm[pipe] = hop_policy_rssi_to_dbm(rssi);
+    }
     if (HOP_COUNT <= 1) {
         return false;
     }
-    bool keepalive = hop_policy_is_keepalive(length);
     if (pipe < PERIPHERAL_COUNT) {
         atomic_or(&pipe_heard_mask, BIT(pipe));
         if (keepalive) {
@@ -128,9 +133,6 @@ bool hop_consume_rx(uint8_t pipe, const uint8_t *data, uint8_t length, int8_t rs
             }
         } else {
             atomic_or(&pipe_active_mask, BIT(pipe));
-            /* Store before the motion bit: the decision tick reads pipe_rssi_dbm only when
-             * that bit is set, so publish the value first. */
-            pipe_rssi_dbm[pipe] = hop_policy_rssi_to_dbm(rssi);
             atomic_or(&pipe_motion_mask, BIT(pipe));
         }
     }
