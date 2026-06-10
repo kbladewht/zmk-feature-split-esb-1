@@ -149,10 +149,31 @@ void hop_note_tx_failed(void) {
 void hop_note_data_sent(void) {
 }
 
+static int8_t worst_pipe_rssi_dbm(void) {
+    int8_t worst = 0;
+    for (uint8_t pipe = 0; pipe < PERIPHERAL_COUNT; pipe++) {
+        if (pipe_rssi_dbm[pipe] < worst) {
+            worst = pipe_rssi_dbm[pipe];
+        }
+    }
+    return worst;
+}
+
 void zmk_split_esb_get_status(struct zmk_split_esb_status *status) {
     __ASSERT_NO_MSG(status != NULL);
     status->channel = hop_current_channel();
     status->epoch = hop_epoch;
     status->searching = silent_windows > 0;
-    status->rssi_dbm = pipe_rssi_dbm[0];
+    status->rssi_dbm = worst_pipe_rssi_dbm();
+}
+
+uint8_t zmk_split_esb_pipe_count(void) {
+    return (uint8_t)PERIPHERAL_COUNT;
+}
+
+int8_t zmk_split_esb_pipe_rssi_dbm(uint8_t pipe) {
+    if (pipe >= PERIPHERAL_COUNT) {
+        return 0;
+    }
+    return pipe_rssi_dbm[pipe];
 }

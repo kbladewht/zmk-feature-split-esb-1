@@ -112,3 +112,14 @@ void zmk_split_esb_get_status(struct zmk_split_esb_status *status) {
     status->searching = bad_windows > 0;
     status->rssi_dbm = last_rssi_dbm;
 }
+
+uint8_t zmk_split_esb_pipe_count(void) {
+    return 1;
+}
+
+int8_t zmk_split_esb_pipe_rssi_dbm(uint8_t pipe) {
+    if (pipe >= 1) {
+        return 0;
+    }
+    return last_rssi_dbm;
+}
