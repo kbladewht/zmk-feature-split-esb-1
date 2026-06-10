@@ -22,8 +22,8 @@
 #include <esb.h>
 
 #include "esb_link.h"
+#include "esb_link_internal.h"
 #include "hop.h"
-#include "hop_policy.h"
 
 LOG_MODULE_REGISTER(zmk_split_esb, CONFIG_ZMK_SPLIT_ESB_LOG_LEVEL);
 
@@ -47,10 +47,7 @@ static const uint8_t peripheral_prefixes[] = {
 };
 #define PERIPHERAL_COUNT ARRAY_SIZE(peripheral_prefixes)
 BUILD_ASSERT(PERIPHERAL_COUNT >= 1, "peripherals needs at least one entry");
-#if !IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
-BUILD_ASSERT(DT_HAS_CHOSEN(zmk_esb_self), "peripheral needs a chosen zmk,esb-self");
-static const uint8_t self_pipe = DT_PROP(DT_CHOSEN(zmk_esb_self), pipe);
-#endif
+const uint8_t esb_link_pipe_count = (uint8_t)PERIPHERAL_COUNT;
 
 static enum esb_crc esb_crc_from_bits(uint8_t bits) {
     switch (bits) {
@@ -81,18 +78,6 @@ static enum esb_bitrate esb_bitrate_from_kbps(uint16_t kbps) {
 BUILD_ASSERT(CONFIG_ZMK_SPLIT_ESB_MAX_PAYLOAD <= CONFIG_ESB_MAX_PAYLOAD_LENGTH,
              "set CONFIG_ESB_MAX_PAYLOAD_LENGTH >= CONFIG_ZMK_SPLIT_ESB_MAX_PAYLOAD in your .conf");
 
-#if IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
-#define ESB_ROLE_MODE ESB_MODE_PRX
-#else
-#define ESB_ROLE_MODE ESB_MODE_PTX
-#endif
-
-struct esb_link_packet {
-    uint8_t pipe;
-    uint8_t length;
-    uint8_t data[CONFIG_ZMK_SPLIT_ESB_MAX_PAYLOAD];
-};
-
 /* RX path: the radio ISR writes each payload straight into a lock-free SPSC ring
  * (no irq_lock, zero-copy slot) and signals the dispatch thread, which hands packets
  * to the role layer in thread context.
@@ -102,12 +87,6 @@ SPSC_DEFINE(rx_spsc, struct esb_link_packet, CONFIG_ZMK_SPLIT_ESB_RX_QUEUE_SIZE)
 static K_SEM_DEFINE(rx_sem, 0, 1);
 static K_THREAD_STACK_DEFINE(rx_thread_stack, CONFIG_ZMK_SPLIT_ESB_RX_THREAD_STACK_SIZE);
 static struct k_thread rx_thread;
-
-#if IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
-/* Reverse-channel replies staged by a thread, drained into the ACK FIFO by the
- * ISR on the next received packet. */
-K_MSGQ_DEFINE(reply_queue, sizeof(struct esb_link_packet), CONFIG_ZMK_SPLIT_ESB_REPLY_QUEUE_SIZE, 4);
-#endif
 
 static esb_link_rx_callback_t rx_callback;
 
@@ -128,34 +107,6 @@ static void rx_thread_fn(void *unused_a, void *unused_b, void *unused_c) {
         }
     }
 }
-
-#if IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
-/* Assumes peripheral pipes are contiguous from 0. */
-uint8_t esb_link_source_ids(uint8_t *out_ids) {
-    __ASSERT_NO_MSG(out_ids != NULL);
-    for (uint8_t pipe = 0; pipe < PERIPHERAL_COUNT; pipe++) {
-        out_ids[pipe] = pipe;
-    }
-    return (uint8_t)PERIPHERAL_COUNT;
-}
-
-/* Drain staged replies into the ACK FIFO so each rides the next ACK back to the peripheral.
- * Peek-then-remove keeps a reply queued if the ACK FIFO is full.
- * ISR-only, so esb_write_payload has a single caller context (no lock needed). */
-static void stage_pending_replies(void) {
-    struct esb_link_packet packet;
-    while (k_msgq_peek(&reply_queue, &packet) == 0) {
-        struct esb_payload payload = {0};
-        payload.pipe = packet.pipe;
-        payload.length = packet.length;
-        memcpy(payload.data, packet.data, packet.length);
-        if (esb_write_payload(&payload) != 0) {
-            break; /* ACK FIFO full, retry on the next received packet */
-        }
-        (void)k_msgq_get(&reply_queue, &packet, K_NO_WAIT);
-    }
-}
-#endif
 
 /* Runs in the ESB IRQ: only move bytes into queues, defer the ZMK handoff. */
 static void on_esb_event(const struct esb_evt *event) {
@@ -181,9 +132,7 @@ static void on_esb_event(const struct esb_evt *event) {
         if (received) {
             k_sem_give(&rx_sem);
         }
-#if IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
-        stage_pending_replies();
-#endif
+        esb_link_role_rx_done();
         break;
     }
     case ESB_EVENT_TX_SUCCESS:
@@ -246,10 +195,7 @@ static int esb_link_radio_setup(void) {
     if (set_error) {
         LOG_DBG("esb_set_tx_power returned %d", set_error);
     }
-    if (ESB_ROLE_MODE == ESB_MODE_PRX) {
-        return esb_start_rx();
-    }
-    return 0;
+    return esb_link_role_start();
 }
 
 int esb_link_init(esb_link_rx_callback_t callback) {
@@ -266,7 +212,7 @@ int esb_link_init(esb_link_rx_callback_t callback) {
 
     struct esb_config config = ESB_DEFAULT_CONFIG;
     config.protocol = ESB_PROTOCOL_ESB_DPL;
-    config.mode = ESB_ROLE_MODE;
+    config.mode = ESB_LINK_ROLE_MODE;
     config.event_handler = on_esb_event;
     config.bitrate = esb_bitrate_from_kbps(bitrate_kbps);
     config.crc = esb_crc_from_bits(crc_bits);
@@ -305,51 +251,7 @@ int esb_link_set_enabled(bool enabled) {
         }
         return 0;
     }
-#if IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
-    int rx_error = esb_start_rx();
+    int start_error = esb_link_role_start();
     hop_start();
-    return rx_error;
-#else
-    hop_start();
-    return 0;
-#endif
+    return start_error;
 }
-
-#if !IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
-int esb_link_send(const uint8_t *data, size_t length, bool ack) {
-    if (length > CONFIG_ZMK_SPLIT_ESB_MAX_PAYLOAD) {
-        return -EMSGSIZE;
-    }
-    hop_note_data_sent();
-    struct esb_payload payload = {0};
-    payload.pipe = self_pipe;
-    payload.noack = !ack;
-    payload.length = (uint8_t)length;
-    memcpy(payload.data, data, length);
-    return esb_write_payload(&payload);
-}
-
-void esb_link_send_keepalive(uint8_t state) {
-    struct esb_payload keepalive = {0};
-    keepalive.pipe = self_pipe;
-    keepalive.length = ESB_KEEPALIVE_LENGTH;
-    keepalive.data[0] = state;
-    (void)esb_write_payload(&keepalive);
-}
-#endif
-
-#if IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
-int esb_link_stage_reply(uint8_t pipe, const uint8_t *data, size_t length) {
-    if (length > CONFIG_ZMK_SPLIT_ESB_MAX_PAYLOAD) {
-        return -EMSGSIZE;
-    }
-    struct esb_link_packet packet = {0};
-    packet.pipe = pipe;
-    packet.length = (uint8_t)length;
-    memcpy(packet.data, data, length);
-    if (k_msgq_put(&reply_queue, &packet, K_NO_WAIT) != 0) {
-        return -ENOBUFS;
-    }
-    return 0;
-}
-#endif
