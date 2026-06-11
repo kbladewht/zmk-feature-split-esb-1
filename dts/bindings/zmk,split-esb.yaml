@@ -30,11 +30,11 @@ properties:
       Two or more hop between channels in list order.
   hop-threshold:
     type: int
-    default: 3
+    default: 6
     description: |
-      Bad windows before acting. Central: weighted link-loss sum across peripherals that
-      triggers a coordinated hop. Peripheral: consecutive failed keepalive windows that
-      trigger a channel sweep.
+      Graded loss before acting; a fully-lost window scores 4, so the default needs
+      two bad windows. Central: weighted link-loss sum across peripherals that
+      triggers a coordinated hop. Peripheral: sweep trigger for the failed-window streak.
   hop-window-ms:
     type: int
     default: 32
