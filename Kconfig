@@ -29,12 +29,27 @@ config ZMK_SPLIT_ESB_RX_THREAD_STACK_SIZE
     int "RX dispatch thread stack size"
     default 1536
     help
-      The dispatch thread runs the role-layer RX callback (split event / command
-      handler), so it needs comparable stack to the work it replaced.
+      Dispatch thread decodes packets and forwards input events to the input
+      subsystem. Behavior-bound traffic is handed to the system workqueue, so
+      ZMK keymap and behavior code never runs on this stack.
 
 config ZMK_SPLIT_ESB_RX_THREAD_PRIORITY
     int "RX dispatch thread priority"
     default 2
+
+config ZMK_SPLIT_ESB_EVENT_QUEUE_SIZE
+    int "Central: behavior-bound event queue depth"
+    default 16
+    help
+      Key, sensor and battery events queue here for the system workqueue,
+      where ZMK behavior state lives. Input events bypass this queue.
+
+config ZMK_SPLIT_ESB_COMMAND_QUEUE_SIZE
+    int "Peripheral: inbound command queue depth"
+    default 8
+    help
+      Central commands (behavior invocations, HID indicators) queue here for
+      the system workqueue.
 
 config ZMK_SPLIT_ESB_REPLY_QUEUE_SIZE
     int "Central: pending reverse-channel command depth"

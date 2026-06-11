@@ -98,6 +98,20 @@ static const struct zmk_split_transport_peripheral_api peripheral_api = {
 
 ZMK_SPLIT_TRANSPORT_PERIPHERAL_REGISTER(esb_peripheral, &peripheral_api, CONFIG_ZMK_SPLIT_ESB_PRIORITY);
 
+/* Commands invoke behaviors, same single-context contract as central events. */
+K_MSGQ_DEFINE(peripheral_command_msgq, sizeof(struct zmk_split_transport_central_command),
+              CONFIG_ZMK_SPLIT_ESB_COMMAND_QUEUE_SIZE, 4);
+
+static void peripheral_command_work_fn(struct k_work *work) {
+    ARG_UNUSED(work);
+    struct zmk_split_transport_central_command command;
+    while (k_msgq_get(&peripheral_command_msgq, &command, K_NO_WAIT) == 0) {
+        zmk_split_transport_peripheral_command_handler(&esb_peripheral, command);
+    }
+}
+
+static K_WORK_DEFINE(peripheral_command_work, peripheral_command_work_fn);
+
 static void peripheral_on_rx(uint8_t pipe, const uint8_t *data, size_t length) {
     ARG_UNUSED(pipe);
     if (length != sizeof(struct zmk_split_transport_central_command)) {
@@ -106,7 +120,11 @@ static void peripheral_on_rx(uint8_t pipe, const uint8_t *data, size_t length) {
     }
     struct zmk_split_transport_central_command command;
     memcpy(&command, data, sizeof(command));
-    zmk_split_transport_peripheral_command_handler(&esb_peripheral, command);
+    if (k_msgq_put(&peripheral_command_msgq, &command, K_NO_WAIT) < 0) {
+        LOG_WRN("Dropping command, queue full");
+        return;
+    }
+    k_work_submit(&peripheral_command_work);
 }
 
 static int peripheral_init(void) {

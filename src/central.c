@@ -62,6 +62,28 @@ static const struct zmk_split_transport_central_api central_api = {
 
 ZMK_SPLIT_TRANSPORT_CENTRAL_REGISTER(esb_central, &central_api, CONFIG_ZMK_SPLIT_ESB_PRIORITY);
 
+struct central_inbound_event {
+    uint8_t source;
+    struct zmk_split_transport_peripheral_event event;
+};
+
+/* ZMK behavior state has no locks, its timers fire on system workqueue:
+ * behavior-bound events must run there too.
+ * Input events bypass, input_report is safe from any context. */
+K_MSGQ_DEFINE(central_event_msgq, sizeof(struct central_inbound_event),
+              CONFIG_ZMK_SPLIT_ESB_EVENT_QUEUE_SIZE, 4);
+
+static void central_event_work_fn(struct k_work *work) {
+    ARG_UNUSED(work);
+    struct central_inbound_event inbound;
+    while (k_msgq_get(&central_event_msgq, &inbound, K_NO_WAIT) == 0) {
+        zmk_split_transport_central_peripheral_event_handler(&esb_central, inbound.source,
+                                                             inbound.event);
+    }
+}
+
+static K_WORK_DEFINE(central_event_work, central_event_work_fn);
+
 static void central_on_rx(uint8_t pipe, const uint8_t *data, size_t length) {
     /* One packet may carry several coalesced events.
      * Decode and replay each in order. */
@@ -74,7 +96,19 @@ static void central_on_rx(uint8_t pipe, const uint8_t *data, size_t length) {
             return;
         }
         offset += consumed;
-        zmk_split_transport_central_peripheral_event_handler(&esb_central, pipe, event);
+        if (event.type == ZMK_SPLIT_TRANSPORT_PERIPHERAL_EVENT_TYPE_INPUT_EVENT) {
+            zmk_split_transport_central_peripheral_event_handler(&esb_central, pipe, event);
+            continue;
+        }
+        struct central_inbound_event inbound = {
+            .source = pipe,
+            .event = event,
+        };
+        if (k_msgq_put(&central_event_msgq, &inbound, K_NO_WAIT) < 0) {
+            LOG_WRN("Dropping event, central event queue full");
+            continue;
+        }
+        k_work_submit(&central_event_work);
     }
 }
 
