@@ -6,6 +6,7 @@
 #include <zephyr/sys/__assert.h>
 #include <zephyr/sys/util.h>
 
+#include "esb_keepalive.h"
 #include "esb_wire.h"
 
 enum {
@@ -37,6 +38,8 @@ static const uint8_t payload_size[] = {
     [ZMK_SPLIT_TRANSPORT_PERIPHERAL_EVENT_TYPE_INPUT_EVENT] = sizeof(struct input_wire),
     [ZMK_SPLIT_TRANSPORT_PERIPHERAL_EVENT_TYPE_BATTERY_EVENT] = WIRE_PAYLOAD(battery_event),
 };
+BUILD_ASSERT(ARRAY_SIZE(payload_size) <= ESB_KEEPALIVE_TAG,
+             "event type tags collide with the keepalive tag");
 
 static bool is_input(uint8_t type) {
     return type == ZMK_SPLIT_TRANSPORT_PERIPHERAL_EVENT_TYPE_INPUT_EVENT;
