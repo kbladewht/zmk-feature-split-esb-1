@@ -12,7 +12,6 @@ if(CONFIG_ZMK_SPLIT_ESB)
       -Wformat=2
       -Wlogical-op
       -Wduplicated-cond
-      -Wduplicated-branches
       -Wmissing-prototypes
       -Wjump-misses-init
       -Wwrite-strings
