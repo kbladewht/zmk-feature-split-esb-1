@@ -34,3 +34,6 @@ int esb_link_role_start(void);
  * Central: drains staged replies into the ACK FIFO, each rides the next ACK out.
  * Peripheral: no-op. */
 void esb_link_role_rx_done(void);
+
+void esb_link_mark_tx_event(void);
+uint32_t esb_link_tx_last_event_ms(void);

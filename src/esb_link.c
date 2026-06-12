@@ -90,6 +90,16 @@ static struct k_thread rx_thread;
 
 static esb_link_rx_callback_t rx_callback;
 
+static uint32_t tx_last_event_ms;
+
+void esb_link_mark_tx_event(void) {
+    tx_last_event_ms = k_uptime_get_32();
+}
+
+uint32_t esb_link_tx_last_event_ms(void) {
+    return tx_last_event_ms;
+}
+
 /* Dedicated dispatch thread: drain the SPSC and hand each packet to the role layer.
  * Off the shared system workqueue so a high RX rate isn't gated by unrelated work. */
 static FUNC_NORETURN void rx_thread_fn(void *unused_a, void *unused_b, void *unused_c) {
@@ -136,9 +146,11 @@ static void on_esb_event(const struct esb_evt *event) {
         break;
     }
     case ESB_EVENT_TX_SUCCESS:
+        esb_link_mark_tx_event();
         hop_note_tx_success((uint8_t)event->tx_attempts);
         break;
     case ESB_EVENT_TX_FAILED: {
+        esb_link_mark_tx_event();
         /* Retransmits exhausted: drop the packet, flush so the TX FIFO can advance. */
         LOG_WRN("TX retransmits exhausted, flushing TX FIFO");
         int flush_error = esb_flush_tx();
