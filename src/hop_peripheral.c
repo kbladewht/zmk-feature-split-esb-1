@@ -26,7 +26,7 @@ static atomic_t link_acked;
 static atomic_t beacon_epoch;
 static uint8_t bad_windows;
 static uint8_t adopted_epoch;
-static int8_t last_rssi_dbm;
+static int8_t uplink_rssi_dbm;
 
 /* Adopt the central's channel when its beacon epoch changes.
  * Otherwise sweep the table on a TX-fail streak to re-find where the central hopped.
@@ -70,13 +70,14 @@ void hop_stop(void) {
 
 bool hop_consume_rx(uint8_t pipe, const uint8_t *data, uint8_t length, int8_t rssi) {
     ARG_UNUSED(pipe);
-    last_rssi_dbm = hop_policy_rssi_to_dbm(rssi);
+    ARG_UNUSED(rssi);
     if (HOP_COUNT <= 1) {
         return false;
     }
     if (hop_policy_is_beacon(length)) {
-        uint8_t epoch = data[0];
-        atomic_set(&beacon_epoch, epoch); /* adopted in keepalive_work, not queued */
+        const struct esb_beacon *beacon = (const struct esb_beacon *)data;
+        atomic_set(&beacon_epoch, beacon->epoch); /* adopted in keepalive_work, not queued */
+        uplink_rssi_dbm = beacon->rssi_dbm;
         return true;
     }
     return false;
@@ -112,7 +113,7 @@ void zmk_split_esb_get_status(struct zmk_split_esb_status *status) {
     status->channel = hop_current_channel();
     status->epoch = adopted_epoch;
     status->searching = atomic_get(&link_acked) == 0;
-    status->rssi_dbm = last_rssi_dbm;
+    status->rssi_dbm = uplink_rssi_dbm;
 }
 
 uint8_t zmk_split_esb_pipe_count(void) {
@@ -123,5 +124,5 @@ int8_t zmk_split_esb_pipe_rssi_dbm(uint8_t pipe) {
     if (pipe >= 1) {
         return 0;
     }
-    return last_rssi_dbm;
+    return uplink_rssi_dbm;
 }

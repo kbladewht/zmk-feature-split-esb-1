@@ -7,8 +7,13 @@
 #include <stddef.h>
 #include <stdint.h>
 
-/* Length-1 ACK reply marks the central's epoch beacon rather than a command. */
-#define ESB_BEACON_LENGTH 1
+struct esb_beacon {
+    uint8_t epoch;
+    int8_t rssi_dbm;
+} __attribute__((packed));
+
+#define ESB_BEACON_LENGTH 2
+_Static_assert(sizeof(struct esb_beacon) == ESB_BEACON_LENGTH, "beacon wire size");
 
 /* Keepalive state byte values: whether the peripheral is actively polling. */
 #define ESB_KEEPALIVE_IDLE 0x00

@@ -29,6 +29,7 @@ static const uint16_t decision_ms = DT_INST_PROP(0, idle_keepalive_ms);
 static const int8_t rssi_floor_dbm = DT_INST_PROP(0, rssi_floor_dbm);
 #define ANCHOR_FALLBACK_WINDOWS (2 * HOP_COUNT)
 #define BEACON_REPEAT_WINDOWS 4
+#define BEACON_RSSI_PERIOD_WINDOWS 4
 static uint8_t hop_epoch;
 static uint8_t pipe_loss[PERIPHERAL_COUNT];
 static int8_t pipe_rssi_dbm[PERIPHERAL_COUNT];
@@ -38,6 +39,7 @@ static atomic_t pipe_active_mask;
 static uint16_t silent_windows;
 static uint8_t beaconed_epoch;
 static uint8_t beacon_repeats_left;
+static uint8_t beacon_window;
 
 static void clear_pipe_loss(void) {
     for (uint8_t pipe = 0; pipe < PERIPHERAL_COUNT; pipe++) {
@@ -60,13 +62,19 @@ static void fall_back_to_anchor(void) {
     clear_pipe_loss();
 }
 
-/* A missed change is recovered by the peripheral's sweep, so the short repeat suffices. */
-static void stage_beacon(void) {
-    if (hop_policy_should_beacon(hop_epoch, &beaconed_epoch, &beacon_repeats_left,
-                                 BEACON_REPEAT_WINDOWS)) {
-        for (uint8_t pipe = 0; pipe < PERIPHERAL_COUNT; pipe++) {
-            (void)esb_link_stage_reply(pipe, &hop_epoch, 1);
+static void stage_beacon(uint32_t heard) {
+    bool burst = hop_policy_should_beacon(hop_epoch, &beaconed_epoch, &beacon_repeats_left,
+                                          BEACON_REPEAT_WINDOWS);
+    bool refresh = (++beacon_window % BEACON_RSSI_PERIOD_WINDOWS) == 0;
+    if (!burst && !refresh) {
+        return;
+    }
+    for (uint8_t pipe = 0; pipe < PERIPHERAL_COUNT; pipe++) {
+        if (!burst && !(heard & BIT(pipe))) {
+            continue;
         }
+        struct esb_beacon beacon = {.epoch = hop_epoch, .rssi_dbm = pipe_rssi_dbm[pipe]};
+        (void)esb_link_stage_reply(pipe, (const uint8_t *)&beacon, sizeof(beacon));
     }
 }
 
@@ -98,7 +106,7 @@ static void decision_work_fn(struct k_work *work) {
     if (silent_windows >= ANCHOR_FALLBACK_WINDOWS) {
         fall_back_to_anchor();
     }
-    stage_beacon();
+    stage_beacon(heard);
     k_work_reschedule(&decision_work, K_MSEC(decision_ms));
 }
 
