@@ -29,16 +29,18 @@ void apply_hop_channel(void) {
     if (hop_index == applied_index) {
         return;
     }
-    applied_index = hop_index;
     unsigned int key = irq_lock();
 #if IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
     esb_stop_rx();
-    esb_set_rf_channel(hop_channels[hop_index]);
+    int set_error = esb_set_rf_channel(hop_channels[hop_index]);
     esb_start_rx();
 #else
-    esb_set_rf_channel(hop_channels[hop_index]); /* PTX: no RX to stop */
+    int set_error = esb_set_rf_channel(hop_channels[hop_index]);
 #endif
     irq_unlock(key);
+    if (set_error == 0) {
+        applied_index = hop_index;
+    }
 }
 
 uint8_t hop_current_channel(void) {
