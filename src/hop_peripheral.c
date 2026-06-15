@@ -22,6 +22,7 @@ static const uint16_t hop_window_ms = DT_INST_PROP(0, hop_window_ms);
 static const uint16_t idle_keepalive_ms = DT_INST_PROP(0, idle_keepalive_ms);
 static atomic_t max_tx_attempts;
 static atomic_t data_sent_since_tick;
+static atomic_t link_acked;
 static atomic_t beacon_epoch;
 static uint8_t bad_windows;
 static uint8_t adopted_epoch;
@@ -52,9 +53,11 @@ static void keepalive_work_fn(struct k_work *work) {
         }
     }
     bool active = atomic_set(&data_sent_since_tick, 0) != 0;
+    bool searching = atomic_get(&link_acked) == 0;
+    uint16_t period_ms = (active || searching) ? hop_window_ms : idle_keepalive_ms;
     esb_link_send_keepalive(active ? ESB_KEEPALIVE_ACTIVE : ESB_KEEPALIVE_IDLE,
                             esb_link_keepalive_bitmap());
-    k_work_reschedule(&keepalive_work, K_MSEC(active ? hop_window_ms : idle_keepalive_ms));
+    k_work_reschedule(&keepalive_work, K_MSEC(period_ms));
 }
 
 void hop_start(void) {
@@ -87,12 +90,14 @@ static void record_tx_attempts(uint8_t attempts) {
 }
 
 void hop_note_tx_success(uint8_t attempts) {
+    atomic_set(&link_acked, 1);
     if (HOP_COUNT > 1) {
         record_tx_attempts(attempts);
     }
 }
 
 void hop_note_tx_failed(void) {
+    atomic_set(&link_acked, 0);
     if (HOP_COUNT > 1) {
         record_tx_attempts(0xFF); /* a lost packet is the worst this window */
     }
