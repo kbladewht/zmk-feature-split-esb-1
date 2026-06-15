@@ -111,7 +111,7 @@ void zmk_split_esb_get_status(struct zmk_split_esb_status *status) {
     __ASSERT_NO_MSG(status != NULL);
     status->channel = hop_current_channel();
     status->epoch = adopted_epoch;
-    status->searching = bad_windows > 0;
+    status->searching = atomic_get(&link_acked) == 0;
     status->rssi_dbm = last_rssi_dbm;
 }
 
