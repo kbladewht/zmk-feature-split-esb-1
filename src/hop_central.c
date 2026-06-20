@@ -31,6 +31,8 @@ static const uint8_t pipe_weights[] = {
 #define PERIPHERAL_COUNT ARRAY_SIZE(pipe_weights)
 static const uint16_t vote_threshold = DT_INST_PROP(0, hop_threshold);
 static const uint16_t decision_ms = DT_INST_PROP(0, idle_keepalive_ms);
+/* One peripheral poll: shorter and a camped half is never heard during the dip. */
+static const uint16_t anchor_dwell_ms = DT_INST_PROP(0, hop_window_ms);
 static const int8_t rssi_floor_dbm = DT_INST_PROP(0, rssi_floor_dbm);
 static const uint16_t mask_threshold = DT_INST_PROP(0, hop_mask_threshold);
 static const uint16_t restore_windows = DT_INST_PROP(0, hop_restore_windows);
@@ -42,13 +44,13 @@ static const uint8_t min_active = DT_INST_PROP(0, hop_min_active);
 #define MASK_UPDATE_REPEAT_WINDOWS 4
 #define MASK_REFRESH_WINDOWS 32
 #define CHANNEL_BAD_DECAY 1
-/* One pipe silent this long, while others are served, gets anchor dips. */
-#define PIPE_LOST_WINDOWS ANCHOR_FALLBACK_WINDOWS
-/* Past here pipe is gone, not lost.
- * Stop dipping so others run clean. */
-#define PIPE_ABSENT_WINDOWS (4 * PIPE_LOST_WINDOWS)
+/* Past here the half is gone, not lost: stop dipping so others run clean.
+ * A give-up time, decoupled from detect, not a multiple of it. */
+#define PIPE_ABSENT_MS 4000
+#define PIPE_ABSENT_WINDOWS                                                                         \
+    MAX(ESB_HOP_LOST_WINDOWS + 1, PIPE_ABSENT_MS / DT_INST_PROP(0, idle_keepalive_ms))
 /* Radio can't park, so dip to anchor one window in this many. */
-#define ANCHOR_VISIT_PERIOD 8
+#define ANCHOR_VISIT_PERIOD 3
 BUILD_ASSERT(ESB_MASK_UPDATE_LENGTH <= CONFIG_ZMK_SPLIT_ESB_MAX_PAYLOAD,
              "mask update does not fit in one ESB payload");
 static uint8_t hop_epoch;
@@ -81,7 +83,7 @@ static void clear_pipe_loss(void) {
 }
 
 static bool pipe_is_lost(uint8_t pipe) {
-    return pipe_silent[pipe] >= PIPE_LOST_WINDOWS && pipe_silent[pipe] < PIPE_ABSENT_WINDOWS;
+    return pipe_silent[pipe] >= ESB_HOP_LOST_WINDOWS && pipe_silent[pipe] < PIPE_ABSENT_WINDOWS;
 }
 
 static void update_pipe_silence(uint32_t heard) {
@@ -253,7 +255,7 @@ static void stage_mask_update(void) {
     struct esb_mask_update update = {.tag = ESB_MASK_UPDATE_TAG, .version = mask_version};
     memcpy(update.mask, mask, ESB_HOP_MASK_BYTES);
     for (uint8_t pipe = 0; pipe < PERIPHERAL_COUNT; pipe++) {
-        if (pipe_silent[pipe] >= PIPE_LOST_WINDOWS) {
+        if (pipe_silent[pipe] >= ESB_HOP_LOST_WINDOWS) {
             continue; /* rejoins via anchor beacon, not a stale-channel mask reply */
         }
         (void)esb_link_stage_reply(pipe, (const uint8_t *)&update, ESB_MASK_UPDATE_LENGTH);
@@ -300,16 +302,18 @@ static void decision_work_fn(struct k_work *work) {
     if (hop_policy_hop_vote(pipe_loss, pipe_weights, PERIPHERAL_COUNT, vote_threshold)) {
         hop_to_next_epoch();
     }
+    uint16_t next_ms = decision_ms;
     if (silent_windows >= ANCHOR_FALLBACK_WINDOWS) {
         fall_back_to_anchor();
     } else if (any_pipe_lost() && (++anchor_visit_window % ANCHOR_VISIT_PERIOD) == 0) {
         in_anchor_visit = true;
         stage_anchor_beacon();
         apply_channel_index(ESB_HOP_ANCHOR_INDEX);
+        next_ms = anchor_dwell_ms;
     }
     stage_beacon(heard);
     stage_mask_update();
-    k_work_reschedule(&decision_work, K_MSEC(decision_ms));
+    k_work_reschedule(&decision_work, K_MSEC(next_ms));
 }
 
 void hop_start(void) {

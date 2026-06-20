@@ -19,10 +19,6 @@
 #include "hop_internal.h"
 #include "hop_policy.h"
 
-/* No-ack windows before camping on the anchor instead of single-stepping. */
-#define CAMP_BOUND_CAP 32 /* windows, bounds the bound on a large pool */
-#define CAMP_BOUND MIN(2 * HOP_COUNT, CAMP_BOUND_CAP)
-
 static const uint16_t hop_threshold = DT_INST_PROP(0, hop_threshold);
 static const uint16_t hop_window_ms = DT_INST_PROP(0, hop_window_ms);
 static const uint16_t idle_keepalive_ms = DT_INST_PROP(0, idle_keepalive_ms);
@@ -94,7 +90,7 @@ static void keepalive_work_fn(struct k_work *work) {
             } else if (lost_windows < UINT8_MAX) {
                 lost_windows++;
             }
-            if (lost_windows >= CAMP_BOUND) {
+            if (lost_windows >= ESB_HOP_CAMP_WINDOWS) {
                 /* Single-stepping rarely lands on a hopping central.
                  * Wait on the anchor for its periodic dip instead. */
                 if (hop_index != ESB_HOP_ANCHOR_INDEX) {

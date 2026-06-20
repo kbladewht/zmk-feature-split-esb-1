@@ -12,6 +12,7 @@
 #include <stdint.h>
 
 #include <zephyr/devicetree.h>
+#include <zephyr/sys/util.h>
 
 #define HOP_COUNT DT_INST_PROP_LEN(0, hop_channels)
 #define ESB_HOP_MASK_BYTES (((size_t)HOP_COUNT + 7) / 8)
@@ -34,6 +35,14 @@ extern uint8_t hop_index;
 /* Reserved pool slot, never masked.
  * Fixed rendezvous channel on a lost link, so both roles agree without sharing mask state. */
 #define ESB_HOP_ANCHOR_INDEX 0
+
+/* Rejoin timing, one source so the peripheral's camp and the central's loss detection
+ * trip at the same wall-clock instant despite their different window periods.
+ * Pool-independent: single-stepping rarely finds a hopping central, so camp fast and let
+ * the anchor dip do the rendezvous. */
+#define ESB_HOP_LOSS_DETECT_MS 256
+#define ESB_HOP_CAMP_WINDOWS DIV_ROUND_UP(ESB_HOP_LOSS_DETECT_MS, DT_INST_PROP(0, hop_window_ms))
+#define ESB_HOP_LOST_WINDOWS MAX(2, ESB_HOP_LOSS_DETECT_MS / DT_INST_PROP(0, idle_keepalive_ms))
 
 void apply_hop_channel(void);
 
