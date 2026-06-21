@@ -149,7 +149,7 @@ no HID-indicator forwarding.
 |---|---|
 | `base-address` | 4-byte bytestring `[..]`, shared by all pipes |
 | `address-length` | on-air address bytes 3/4/5, shorter trims airtime, weakens selectivity, all devices must match (default 5) |
-| `peripherals` | one child node per peripheral: `pipe`, `prefix` (1 byte), `weight` |
+| `peripherals` | one child node per peripheral: `pipe`, `prefix` (1 byte), `weight`, `reply-queue-depth` (central reverse-channel backlog for this pipe, default 8) |
 | `hop-channels` | channel bytestring, each 0-100 (2400 + N MHz). 1 = fixed, 2+ = hopping set |
 | `hop-threshold` | graded loss before acting: central hop-vote sum, peripheral sweep streak; fully-lost window scores 4 (default 6) |
 | `hop-window-ms` | peripheral keepalive period while data flows (default 32) |
@@ -188,7 +188,6 @@ Tunables (Kconfig, defaults shown):
 | `ZMK_SPLIT_ESB_RX_THREAD_PRIORITY` | 2 | RX dispatch thread priority |
 | `ZMK_SPLIT_ESB_EVENT_QUEUE_SIZE` | 16 | central queue for key/sensor/battery events bound for the system workqueue |
 | `ZMK_SPLIT_ESB_COMMAND_QUEUE_SIZE` | 8 | peripheral queue for inbound central commands |
-| `ZMK_SPLIT_ESB_REPLY_QUEUE_SIZE` | 8 | central reverse-channel queue depth |
 | `ZMK_SPLIT_ESB_PRIORITY` | 50 | transport registration priority |
 
 ## Lost-event reconcile

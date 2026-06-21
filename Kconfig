@@ -51,10 +51,6 @@ config ZMK_SPLIT_ESB_COMMAND_QUEUE_SIZE
       Central commands (behavior invocations, HID indicators) queue here for
       the system workqueue.
 
-config ZMK_SPLIT_ESB_REPLY_QUEUE_SIZE
-    int "Central: pending reverse-channel command depth"
-    default 8
-
 config ZMK_SPLIT_ESB_PRIORITY
     int "Split transport registration priority"
     default 50
