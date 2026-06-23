@@ -165,6 +165,7 @@ static void hop_to_next_epoch(void) {
     hop_index = hop_policy_channel_for_epoch_masked(hop_epoch, active_mask, HOP_COUNT);
     apply_hop_channel();
     clear_pipe_loss();
+    LOG_INF("hop: epoch %u channel %u", hop_epoch, hop_current_channel());
 }
 
 static void fall_back_to_anchor(void) {
@@ -174,6 +175,7 @@ static void fall_back_to_anchor(void) {
     apply_hop_channel();
     silent_windows = 0;
     clear_pipe_loss();
+    LOG_INF("hop: anchor fallback channel %u", hop_current_channel());
 }
 
 static void stage_beacon(uint32_t heard) {
@@ -224,7 +226,7 @@ static void recompute_mask(void) {
             channel_bad[channel] = 0;
             channel_masked_windows[channel] = 0;
             changed = true;
-            LOG_INF("afh: ch %u back to retest", (unsigned)hop_channel_at((uint8_t)channel));
+            LOG_INF("afh: channel %u back to retest", (unsigned)hop_channel_at((uint8_t)channel));
         }
     }
     if (hop_policy_mask_active_count(pending_mask, HOP_COUNT) > min_active) {
@@ -242,7 +244,7 @@ static void recompute_mask(void) {
             hop_policy_mask_set(pending_mask, (size_t)worst, false);
             channel_masked_windows[worst] = 0;
             changed = true;
-            LOG_INF("afh: ch %u masked, score %u, %u active", (unsigned)hop_channel_at((uint8_t)worst),
+            LOG_INF("afh: channel %u masked, score %u, %u active", (unsigned)hop_channel_at((uint8_t)worst),
                     (unsigned)channel_bad[worst],
                     (unsigned)hop_policy_mask_active_count(pending_mask, HOP_COUNT));
         }
@@ -303,6 +305,8 @@ static void decision_work_fn(struct k_work *work) {
     }
 
     hop_policy_accrue_loss(pipe_loss, PERIPHERAL_COUNT, motion, active, pipe_rssi_dbm, rssi_floor_dbm);
+    LOG_DBG("hop: heard=%02x motion=%02x active=%02x", (unsigned)heard, (unsigned)motion,
+            (unsigned)active);
     score_current_channel(motion, active);
     recompute_mask();
     update_pipe_silence(heard);
@@ -324,6 +328,7 @@ static void decision_work_fn(struct k_work *work) {
             stage_anchor_beacon();
             apply_channel_index(ESB_HOP_ANCHOR_INDEX);
             next_ms = anchor_dwell_ms;
+            LOG_DBG("hop: anchor dip");
         }
     }
     stage_beacon(heard);
