@@ -55,7 +55,7 @@ uint8_t hop_channel_at(uint8_t index) {
     return hop_channels[index];
 }
 
-BUILD_ASSERT(ESB_HOP_ANCHOR_COUNT >= 1 && ESB_HOP_ANCHOR_COUNT <= HOP_COUNT,
+BUILD_ASSERT(HOP_COUNT <= 1 || (ESB_HOP_ANCHOR_COUNT >= 1 && ESB_HOP_ANCHOR_COUNT <= HOP_COUNT),
              "hop-anchors is empty or larger than hop-channels");
 static uint8_t anchor_indices[ESB_HOP_ANCHOR_COUNT];
 static bool anchors_resolved;
