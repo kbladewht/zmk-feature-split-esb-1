@@ -60,7 +60,6 @@ Shared (`esb_shared.dtsi`), every device:
     esb_link {
         compatible = "zmk,split-esb";
         base-address = [E7 D3 9A 5C];
-        hop-channels = [04];
         peripherals {
             mouse: peripheral_mouse {
                 pipe = <0>;
@@ -111,7 +110,6 @@ Shared (`esb_shared.dtsi`):
     esb_link {
         compatible = "zmk,split-esb";
         base-address = [E7 D3 9A 5C];
-        hop-channels = [04];
         peripherals {
             left: peripheral_left {
                 pipe = <0>;
