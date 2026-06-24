@@ -151,7 +151,7 @@ no HID-indicator forwarding.
 | `address-length` | on-air address bytes 3/4/5, shorter trims airtime, weakens selectivity, all devices must match (default 5) |
 | `peripherals` | one child node per peripheral: `pipe`, `prefix` (1 byte), `weight`, `reply-queue-depth` (central reverse-channel backlog for this pipe, default 8) |
 | `hop-channels` | channel bytestring, each 0-100 (2400 + N MHz). 1 = fixed, 2+ = hopping set |
-| `hop-anchors` | optional subset of hop-channels kept unmaskable, the rendezvous set; omit for the first three entries. Pick channels clear of local WiFi |
+| `hop-anchors` | unmaskable rendezvous set, a subset of hop-channels (default 76, 79, 82). Pick channels clear of local WiFi |
 | `hop-threshold` | graded loss before acting: central hop-vote sum, peripheral sweep streak; fully-lost window scores 4 (default 6) |
 | `hop-window-ms` | peripheral keepalive period while data flows (default 32) |
 | `rssi-floor-dbm` | central counts a served peripheral's motion weaker than this (dBm) as a degraded window (default -85) |
@@ -218,11 +218,11 @@ to re-find it, sweeping faster the more its acked transmits retried. One channel
 fixed link, no hopping. Every peripheral must carry the central's list, so flash them
 as a set.
 
-A few channels (the anchors) are held unmaskable as the rendezvous set both ends meet
-on when the link is lost. `hop-anchors` picks them; omitted, the first three
-`hop-channels` entries serve. The engine can never mask an anchor, so pick channels
-clear of local WiFi, otherwise the link rendezvouses on contended spectrum. The masked
-channels carry data only; AFH drops the ones that perform badly.
+A few channels (the anchors) are held unmaskable, the rendezvous set both ends meet on
+when the link is lost. `hop-anchors` picks them, default 76, 79, 82. The engine can never
+mask an anchor, so pick channels clear of local WiFi, otherwise the link rendezvouses on
+contended spectrum. The rest of the pool carries data, AFH drops the channels that
+perform badly.
 
 ## Load order
 
