@@ -104,12 +104,13 @@ ZTEST(hop_policy, test_score_update_accrues_and_saturates) {
 
 ZTEST(hop_policy, test_worst_channel) {
     uint8_t mask[1] = {0x3F};
+    uint8_t anchors[1] = {0x03};
     uint8_t bad[6] = {99, 99, 20, 10, 30, 18};
-    zassert_equal(hop_policy_worst_channel(bad, mask, 6, 2, 16), 4, "anchors 0,1 exempt, worst is 4");
+    zassert_equal(hop_policy_worst_channel(bad, mask, anchors, 6, 16), 4, "anchors 0,1 exempt, worst is 4");
     uint8_t low[6] = {99, 99, 5, 5, 5, 5};
-    zassert_equal(hop_policy_worst_channel(low, mask, 6, 2, 16), 6, "none over threshold returns count");
+    zassert_equal(hop_policy_worst_channel(low, mask, anchors, 6, 16), 6, "none over threshold returns count");
     uint8_t masked[1] = {0x0F};
-    zassert_equal(hop_policy_worst_channel(bad, masked, 6, 2, 16), 2, "inactive channel 4 skipped");
+    zassert_equal(hop_policy_worst_channel(bad, masked, anchors, 6, 16), 2, "inactive channel 4 skipped");
 }
 
 ZTEST(hop_policy, test_window_penalty) {

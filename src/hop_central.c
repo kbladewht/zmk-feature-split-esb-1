@@ -71,6 +71,7 @@ static uint8_t channel_bad[HOP_COUNT];
 static uint16_t channel_masked_windows[HOP_COUNT];
 static uint8_t active_mask[ESB_HOP_MASK_BYTES];
 static uint8_t pending_mask[ESB_HOP_MASK_BYTES];
+static uint8_t anchor_mask[ESB_HOP_MASK_BYTES];
 static bool pending_valid;
 static bool mask_ready;
 static uint8_t mask_version;
@@ -159,6 +160,9 @@ static void ensure_mask(void) {
     for (size_t channel = 0; channel < HOP_COUNT; channel++) {
         hop_policy_mask_set(active_mask, channel, true);
         hop_policy_mask_set(pending_mask, channel, true);
+        if (hop_is_anchor_index((uint8_t)channel)) {
+            hop_policy_mask_set(anchor_mask, channel, true);
+        }
     }
     mask_ready = true;
 }
@@ -230,8 +234,8 @@ static void recompute_mask(void) {
         }
     }
     if (hop_policy_mask_active_count(pending_mask, HOP_COUNT) > min_active) {
-        size_t worst = hop_policy_worst_channel(channel_bad, pending_mask, HOP_COUNT,
-                                                ESB_HOP_ANCHOR_COUNT, mask_threshold);
+        size_t worst = hop_policy_worst_channel(channel_bad, pending_mask, anchor_mask, HOP_COUNT,
+                                                mask_threshold);
         if (worst < HOP_COUNT) {
             hop_policy_mask_set(pending_mask, worst, false);
             channel_masked_windows[worst] = 0;
@@ -333,11 +337,12 @@ static void decision_work_fn(struct k_work *work) {
         }
         if ((++anchor_visit_window % dip_period) == 0) {
             rendezvous_anchor = hop_policy_index_next(rendezvous_anchor, ESB_HOP_ANCHOR_COUNT);
+            uint8_t anchor_index = hop_anchor_index_at(rendezvous_anchor);
             in_anchor_visit = true;
             stage_anchor_beacon();
-            apply_channel_index(rendezvous_anchor);
+            apply_channel_index(anchor_index);
             next_ms = anchor_dwell_ms;
-            LOG_DBG("hop: anchor dip channel %u", (unsigned)hop_channel_at(rendezvous_anchor));
+            LOG_DBG("hop: anchor dip channel %u", (unsigned)hop_channel_at(anchor_index));
         }
     }
     if (rejoining != 0) {

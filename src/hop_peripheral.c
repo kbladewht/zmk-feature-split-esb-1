@@ -108,8 +108,9 @@ static void keepalive_work_fn(struct k_work *work) {
             } else {
                 hop_policy_camp_step(&camp_anchor, &camp_dwell, ESB_HOP_ANCHOR_COUNT,
                                      ESB_HOP_ANCHOR_DWELL_WINDOWS);
-                if (hop_index != camp_anchor) {
-                    hop_index = camp_anchor;
+                uint8_t anchor_index = hop_anchor_index_at(camp_anchor);
+                if (hop_index != anchor_index) {
+                    hop_index = anchor_index;
                     apply_hop_channel();
                 }
             }

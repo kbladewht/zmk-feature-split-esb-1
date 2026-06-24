@@ -54,3 +54,46 @@ uint8_t hop_current_channel(void) {
 uint8_t hop_channel_at(uint8_t index) {
     return hop_channels[index];
 }
+
+BUILD_ASSERT(ESB_HOP_ANCHOR_COUNT >= 1 && ESB_HOP_ANCHOR_COUNT <= HOP_COUNT,
+             "hop-anchors is empty or larger than hop-channels");
+static uint8_t anchor_indices[ESB_HOP_ANCHOR_COUNT];
+static bool anchors_resolved;
+
+/* hop-anchors lists channels, the engine indexes the pool. Resolve each to its index,
+ * leaving unlisted slots at their positional default. */
+static void resolve_anchors(void) {
+    if (anchors_resolved) {
+        return;
+    }
+    for (uint8_t slot = 0; slot < ESB_HOP_ANCHOR_COUNT; slot++) {
+        anchor_indices[slot] = slot;
+    }
+#if DT_INST_NODE_HAS_PROP(0, hop_anchors)
+    static const uint8_t anchor_channels[] = DT_INST_PROP(0, hop_anchors);
+    for (size_t slot = 0; slot < ARRAY_SIZE(anchor_channels); slot++) {
+        for (uint8_t index = 0; index < HOP_COUNT; index++) {
+            if (hop_channels[index] == anchor_channels[slot]) {
+                anchor_indices[slot] = index;
+                break;
+            }
+        }
+    }
+#endif
+    anchors_resolved = true;
+}
+
+uint8_t hop_anchor_index_at(uint8_t slot) {
+    resolve_anchors();
+    return anchor_indices[slot];
+}
+
+bool hop_is_anchor_index(uint8_t index) {
+    resolve_anchors();
+    for (uint8_t slot = 0; slot < ESB_HOP_ANCHOR_COUNT; slot++) {
+        if (anchor_indices[slot] == index) {
+            return true;
+        }
+    }
+    return false;
+}

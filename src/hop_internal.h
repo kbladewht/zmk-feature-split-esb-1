@@ -32,9 +32,9 @@ static inline bool esb_is_mask_update(const uint8_t *data, uint8_t length) {
 
 extern uint8_t hop_index;
 
-/* Lowest pool slots, never masked.
- * Both roles cycle the set on a lost link. */
-#define ESB_HOP_ANCHOR_COUNT MIN((uint8_t)3, (uint8_t)HOP_COUNT)
+/* Rendezvous channels, never masked, both roles cycle them on a lost link.
+ * hop-anchors picks them, else the first three pool entries. */
+#define ESB_HOP_ANCHOR_COUNT DT_INST_PROP_LEN_OR(0, hop_anchors, MIN((uint8_t)3, (uint8_t)HOP_COUNT))
 #define ESB_HOP_DIP_PERIOD 3
 #define ESB_HOP_DIP_ABSENT_PERIOD 6
 /* A stable channel is re-found by the peripheral's sweep, so a dip here only covers
@@ -61,3 +61,6 @@ void apply_hop_channel(void);
 void apply_channel_index(uint8_t index);
 
 uint8_t hop_channel_at(uint8_t index);
+
+uint8_t hop_anchor_index_at(uint8_t slot);
+bool hop_is_anchor_index(uint8_t index);

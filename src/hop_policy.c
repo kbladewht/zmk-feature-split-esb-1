@@ -145,13 +145,15 @@ void hop_policy_score_update(uint8_t *score, uint8_t penalty, uint8_t decay) {
     }
 }
 
-size_t hop_policy_worst_channel(const uint8_t *channel_bad, const uint8_t *mask, size_t pool_count,
-                                size_t anchor_count, uint16_t mask_threshold) {
+size_t hop_policy_worst_channel(const uint8_t *channel_bad, const uint8_t *mask,
+                                const uint8_t *anchor_mask, size_t pool_count,
+                                uint16_t mask_threshold) {
     assert(channel_bad != NULL);
     assert(mask != NULL);
+    assert(anchor_mask != NULL);
     size_t worst = pool_count;
-    for (size_t channel = anchor_count; channel < pool_count; channel++) {
-        if (!hop_policy_mask_get(mask, channel)) {
+    for (size_t channel = 0; channel < pool_count; channel++) {
+        if (hop_policy_mask_get(anchor_mask, channel) || !hop_policy_mask_get(mask, channel)) {
             continue;
         }
         if (channel_bad[channel] < mask_threshold) {

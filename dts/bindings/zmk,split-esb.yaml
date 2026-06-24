@@ -30,6 +30,12 @@ properties:
       measures the pool from live traffic and masks any channel that still performs badly.
       Set explicitly to use a different band. One channel means fixed operation.
     default: [24, 25, 49, 50, 74, 75, 76, 77, 78, 79, 80]
+  hop-anchors:
+    type: uint8-array
+    description: |
+      Rendezvous channels, a subset of hop-channels, kept unmaskable so a lost link always
+      re-finds the central on known spectrum. Pick channels clear of local WiFi, since the
+      engine can never mask these. Omit to use the first three hop-channels entries.
   hop-threshold:
     type: int
     default: 24

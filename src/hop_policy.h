@@ -59,9 +59,10 @@ bool hop_policy_mask_get(const uint8_t *mask, size_t index);
 void hop_policy_mask_set(uint8_t *mask, size_t index, bool active);
 size_t hop_policy_mask_active_count(const uint8_t *mask, size_t pool_count);
 
-/* Returns pool_count when no channel qualifies. */
-size_t hop_policy_worst_channel(const uint8_t *channel_bad, const uint8_t *mask, size_t pool_count,
-                                size_t anchor_count, uint16_t mask_threshold);
+/* Returns pool_count when no channel qualifies. Channels set in anchor_mask are exempt. */
+size_t hop_policy_worst_channel(const uint8_t *channel_bad, const uint8_t *mask,
+                                const uint8_t *anchor_mask, size_t pool_count,
+                                uint16_t mask_threshold);
 
 /* Zero when no pipe polls this window: an untested channel is neither blamed nor cleared. */
 uint8_t hop_policy_window_penalty(uint32_t motion_mask, uint32_t active_mask,
