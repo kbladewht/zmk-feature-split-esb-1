@@ -140,17 +140,17 @@ static void forward_key_position(uint8_t source, uint32_t position, bool pressed
     zmk_split_transport_central_peripheral_event_handler(&esb_central, source, event);
 }
 
-static void reconcile_positions(uint8_t source, const uint8_t *received) {
+static void replay_position_diff(uint8_t source, const uint8_t *target, const char *reason) {
     if (source >= CENTRAL_PIPE_MAX) {
         return;
     }
     uint8_t *tracked = tracked_positions[source];
-    for (uint32_t position = esb_keepalive_bitmap_diff_next(tracked, received, 0);
+    for (uint32_t position = esb_keepalive_bitmap_diff_next(tracked, target, 0);
          position < ESB_KEEPALIVE_POSITION_COUNT;
-         position = esb_keepalive_bitmap_diff_next(tracked, received, position + 1)) {
-        bool pressed = esb_keepalive_bitmap_get(received, position);
-        LOG_WRN("Reconciling lost %s of position %u from %u", pressed ? "press" : "release",
-                (unsigned int)position, source);
+         position = esb_keepalive_bitmap_diff_next(tracked, target, position + 1)) {
+        bool pressed = esb_keepalive_bitmap_get(target, position);
+        LOG_WRN("%s: position %u %s from %u", reason, (unsigned int)position,
+                pressed ? "press" : "release", (unsigned int)source);
         esb_keepalive_bitmap_set(tracked, position, pressed);
         forward_key_position(source, position, pressed);
     }
@@ -185,13 +185,7 @@ static void deliver_key_event(uint8_t source,
 static void release_stale_pipe(uint8_t pipe) {
     LOG_WRN("Releasing held state of silent peripheral %u", pipe);
     static const uint8_t no_positions[ESB_KEEPALIVE_BITMAP_BYTES];
-    uint8_t *tracked = tracked_positions[pipe];
-    for (uint32_t position = esb_keepalive_bitmap_diff_next(tracked, no_positions, 0);
-         position < ESB_KEEPALIVE_POSITION_COUNT;
-         position = esb_keepalive_bitmap_diff_next(tracked, no_positions, position + 1)) {
-        esb_keepalive_bitmap_set(tracked, position, false);
-        forward_key_position(pipe, position, false);
-    }
+    replay_position_diff(pipe, no_positions, "Release stale");
     if (IS_ENABLED(CONFIG_ZMK_INPUT_SPLIT)) {
         for (uint8_t reg = 0; reg < CENTRAL_INPUT_REG_MAX; reg++) {
             if ((pipe_seen_input_regs[pipe] & BIT(reg)) != 0) {
@@ -242,7 +236,7 @@ static void central_event_work_fn(struct k_work *work) {
     struct central_inbound inbound;
     while (k_msgq_get(&central_event_msgq, &inbound, K_NO_WAIT) == 0) {
         if (inbound.kind == CENTRAL_INBOUND_KEEPALIVE) {
-            reconcile_positions(inbound.source, inbound.data.position_bitmap);
+            replay_position_diff(inbound.source, inbound.data.position_bitmap, "Reconcile lost");
             continue;
         }
         if (inbound.data.event.type == ZMK_SPLIT_TRANSPORT_PERIPHERAL_EVENT_TYPE_KEY_POSITION_EVENT) {
