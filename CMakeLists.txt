@@ -5,6 +5,7 @@ if(CONFIG_ZMK_SPLIT_ESB)
   zephyr_include_directories(include)
   zephyr_library()
   zephyr_library_include_directories(${APPLICATION_SOURCE_DIR}/include)
+  message(STATUS "111111 ${APPLICATION_SOURCE_DIR}")
   zephyr_library_compile_options(
       -Werror
       -Wextra
