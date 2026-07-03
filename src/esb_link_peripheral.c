@@ -44,19 +44,19 @@ static const uint8_t self_pipe = DT_PROP(DT_CHOSEN(zmk_esb_self), pipe);
  * submitters racing at a near-full FIFO can overflow the ring. Input thread and
  * system workqueue both submit here: extend esb.c's own lock domain over the
  * unlocked pre-check. */
-static int submit_payload(const struct esb_payload *payload) {
-    unsigned int key = irq_lock();
-    int error = esb_write_payload(payload);
-    if (error == -ENOMEM &&
-        (k_uptime_get_32() - esb_link_tx_last_event_ms()) > TX_STALL_TIMEOUT_MS) {
-        LOG_WRN("TX engine stalled, flushing to recover");
-        (void)esb_flush_tx();
-        esb_link_mark_tx_event();
-        error = esb_write_payload(payload);
+    static int submit_payload(const struct esb_payload *payload) {
+        unsigned int key = irq_lock();
+        int error = esb_write_payload(payload);
+        if (error == -ENOMEM &&
+            (k_uptime_get_32() - esb_link_tx_last_event_ms()) > TX_STALL_TIMEOUT_MS) {
+            // LOG_WRN("TX engine stalled, flushing to recover");
+            (void)esb_flush_tx();
+            esb_link_mark_tx_event();
+            error = esb_write_payload(payload);
+        }
+        irq_unlock(key);
+        return error;
     }
-    irq_unlock(key);
-    return error;
-}
 
 int esb_link_send(const uint8_t *data, size_t length, bool ack) {
     if (length > CONFIG_ZMK_SPLIT_ESB_MAX_PAYLOAD) {

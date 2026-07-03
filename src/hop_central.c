@@ -184,7 +184,7 @@ static void hop_to_next_epoch(void) {
     apply_hop_channel();
     clear_pipe_loss();
     windows_since_hop = 0;
-    LOG_INF("hop: epoch %u channel %u", hop_epoch, hop_current_channel());
+    LOG_INF("Center 4444: hop: epoch %u channel %u", hop_epoch, hop_current_channel());
 }
 
 /* Prolonged total silence: the live channel may have degraded with no active pipe

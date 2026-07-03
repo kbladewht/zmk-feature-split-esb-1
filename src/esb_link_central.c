@@ -76,12 +76,42 @@ int esb_link_stage_reply(uint8_t pipe, const uint8_t *data, size_t length) {
 int esb_link_role_start(void) {
     return esb_start_rx();
 }
-
+#include <zephyr/logging/log.h>
+LOG_MODULE_DECLARE(zmk_split_esb, CONFIG_ZMK_SPLIT_ESB_LOG_LEVEL);
 /* ISR-only, so esb_write_payload has a single caller context, no lock. */
 void esb_link_role_rx_done(void) {
     for (uint8_t pipe = 0; pipe < REPLY_PIPE_COUNT; pipe++) {
         struct esb_link_packet packet;
         while (k_msgq_peek(reply_queue[pipe], &packet) == 0) {
+            // LOG_HEXDUMP_INF(packet.data, packet.length, "3333 ACK payload");
+
+bool is_known_packet = false;
+            if (packet.length == 4) {
+                if (packet.data[0] == 0xFE &&
+                    packet.data[1] == 0x00 &&
+                    packet.data[2] == 0x00 &&
+                    packet.data[3] == 0x00) {
+                    is_known_packet = true;
+                }
+                if (packet.data[0] == 0xFE &&
+                    packet.data[1] == 0x01 &&
+                    packet.data[2] == 0x00 &&
+                    packet.data[3] == 0x00) {
+                    is_known_packet = true;
+                }
+                if (packet.data[0] == 0xFD &&
+                    packet.data[1] == 0x00 &&
+                    packet.data[2] == 0xFF &&
+                    packet.data[3] == 0x03) {
+                    is_known_packet = true;
+                }
+            }
+            
+            if (!is_known_packet) {
+                LOG_INF("3333 ACK payload to pipe %u:", pipe);
+                LOG_HEXDUMP_INF(packet.data, packet.length, "ACK data:");
+            }
+
             struct esb_payload payload = {0};
             payload.pipe = packet.pipe;
             payload.length = packet.length;

@@ -1,7 +1,7 @@
 # Copyright 2026 Roman Kuzmitskii (@damex)
 # SPDX-License-Identifier: MIT
 
-name: zmk-feature-split-esb
+name: zmk-feature-split-esb-damex
 build:
   cmake: .
   kconfig: Kconfig

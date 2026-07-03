@@ -165,6 +165,8 @@ static void deliver_key_event(uint8_t source,
                               const struct zmk_split_transport_peripheral_event *event) {
     uint32_t position = event->data.key_position_event.position;
     bool pressed = event->data.key_position_event.pressed;
+    LOG_INF("position is %u", (unsigned int)position);
+    LOG_INF("pressed is %s", pressed ? "true" : "false" );
     if (source >= CENTRAL_PIPE_MAX || position >= ESB_KEEPALIVE_POSITION_COUNT) {
         zmk_split_transport_central_peripheral_event_handler(&esb_central, source, *event);
         return;
@@ -267,6 +269,7 @@ static void central_event_work_fn(struct k_work *work) {
             continue;
         }
         if (inbound.data.event.type == ZMK_SPLIT_TRANSPORT_PERIPHERAL_EVENT_TYPE_KEY_POSITION_EVENT) {
+            // LOG_INF("1111");
             deliver_key_event(inbound.source, &inbound.data.event);
             continue;
         }
@@ -277,6 +280,7 @@ static void central_event_work_fn(struct k_work *work) {
             }
             continue;
         }
+        LOG_INF("22222222222222222");
         zmk_split_transport_central_peripheral_event_handler(&esb_central, inbound.source,
                                                              inbound.data.event);
     }

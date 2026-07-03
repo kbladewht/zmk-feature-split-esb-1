@@ -124,6 +124,7 @@ static void on_esb_event(const struct esb_evt *event) {
     case ESB_EVENT_RX_RECEIVED: {
         bool received = false;
         struct esb_payload payload;
+        // LOG_INF("333333333");
         while (esb_read_rx_payload(&payload) == 0) {
             if (hop_consume_rx(payload.pipe, payload.data, payload.length, payload.rssi)) {
                 continue; /* control packet (keepalive or beacon), not queued */
@@ -138,6 +139,9 @@ static void on_esb_event(const struct esb_evt *event) {
             memcpy(slot->data, payload.data, slot->length);
             spsc_produce(&rx_spsc);
             received = true;
+            //  LOG_INF("RX pipe=%u len=%u rssi=%d", 
+            //     payload.pipe, payload.length, payload.rssi);
+            //  LOG_HEXDUMP_INF(payload.data, payload.length, "RX data:");
         }
         if (received) {
             k_sem_give(&rx_sem);
@@ -152,7 +156,7 @@ static void on_esb_event(const struct esb_evt *event) {
     case ESB_EVENT_TX_FAILED: {
         esb_link_mark_tx_event();
         /* Retransmits exhausted: drop the packet, flush so the TX FIFO can advance. */
-        LOG_WRN("TX retransmits exhausted, flushing TX FIFO");
+        // LOG_WRN("TX retransmits exhausted, flushing TX FIFO");
         int flush_error = esb_flush_tx();
         if (flush_error) {
             LOG_DBG("esb_flush_tx after TX_FAILED returned %d", flush_error);
@@ -184,13 +188,21 @@ static int hfclk_request(void) {
  * set_* failures are logged and ignored.
  * The radio starts on whatever values it already held. */
 static int esb_link_radio_setup(void) {
+    // 单行打印（假设 address_length <= 5）
+    LOG_INF("base_address: %02X %02X %02X %02X %02X",
+            base_address[0],
+            address_length > 1 ? base_address[1] : 0,
+            address_length > 2 ? base_address[2] : 0,
+            address_length > 3 ? base_address[3] : 0,
+            address_length > 4 ? base_address[4] : 0);
+LOG_INF("peripheral_prefixes[0]: 0x%02X", peripheral_prefixes[0]);
     int set_error = esb_set_address_length(address_length);
     if (set_error) {
         LOG_DBG("esb_set_address_length returned %d", set_error);
     }
     set_error = esb_set_base_address_0(base_address);
     if (set_error) {
-        LOG_DBG("esb_set_base_address_0 returned %d", set_error);
+        LOG_INF("esb_set_base_address_0 returned %d", set_error);
     }
     set_error = esb_set_base_address_1(base_address);
     if (set_error) {
@@ -210,6 +222,7 @@ static int esb_link_radio_setup(void) {
     }
     return esb_link_role_start();
 }
+
 
 int esb_link_init(esb_link_rx_callback_t callback) {
     rx_callback = callback;
