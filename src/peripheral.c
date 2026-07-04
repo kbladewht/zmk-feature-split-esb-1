@@ -85,6 +85,8 @@ uint8_t esb_link_keepalive_battery_level(void) {
 
 static int peripheral_report_event(const struct zmk_split_transport_peripheral_event *event) {
     if (event->type == ZMK_SPLIT_TRANSPORT_PERIPHERAL_EVENT_TYPE_INPUT_EVENT) {
+        LOG_INF("TX11111 : Reporting input event %u,%u", (unsigned int)event->data.input_event.type,
+             (unsigned int)event->data.input_event.code);
         return esb_batch_report_event(&batch, event, event_wants_ack(event));
     }
     if (event->type == ZMK_SPLIT_TRANSPORT_PERIPHERAL_EVENT_TYPE_KEY_POSITION_EVENT) {
@@ -95,6 +97,7 @@ static int peripheral_report_event(const struct zmk_split_transport_peripheral_e
     }
     uint8_t wire[ESB_WIRE_MAX_EVENT_SIZE];
     size_t length = esb_wire_encode_event(wire, sizeof(wire), event);
+    
     return esb_link_send(wire, length, event_wants_ack(event));
 }
 
@@ -143,6 +146,7 @@ static K_WORK_DEFINE(peripheral_command_work, peripheral_command_work_fn);
 
 static void peripheral_on_rx(uint8_t pipe, const uint8_t *data, size_t length) {
     ARG_UNUSED(pipe);
+    LOG_INF("RX111113 : Received command");
     if (length != sizeof(struct zmk_split_transport_central_command)) {
         LOG_WRN("Dropping command with unexpected size %u", (unsigned int)length);
         LOG_HEXDUMP_DBG(data, length, "unexpected command payload");
@@ -154,11 +158,31 @@ static void peripheral_on_rx(uint8_t pipe, const uint8_t *data, size_t length) {
         LOG_WRN("Dropping command, queue full");
         return;
     }
+    LOG_INF("TX11111 : Received command %u", (unsigned int)command.type);
     k_work_submit(&peripheral_command_work);
 }
 
 static int peripheral_init(void) {
     return esb_link_init(peripheral_on_rx);
 }
+
+static bool ack_payload_is_indicator(const uint8_t *data, uint8_t length) {
+    return length == 8 && data[0] == 3;
+}
+void process_ack_payload(const uint8_t *data, uint8_t length) {
+    LOG_HEXDUMP_INF(data, 8,"CJ ACK");
+    if (ack_payload_is_indicator(data, length)) {
+       
+        uint8_t indicator = data[1];
+        if(indicator == 3){
+             LOG_INF("Received indicator payload, cap lock is on");
+        }else{
+             LOG_INF("Received indicator payload, cap lock is off");
+        }
+        // zmk_indicator_set(indicator);
+    }
+}
+
+
 
 SYS_INIT(peripheral_init, APPLICATION, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT);

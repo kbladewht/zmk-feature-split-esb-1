@@ -20,7 +20,9 @@
 #include "esb_link.h"
 #include "esb_link_internal.h"
 
+#include <zephyr/logging/log.h>
 #define ESB_PERIPHERALS DT_INST_CHILD(0, peripherals)
+LOG_MODULE_DECLARE(zmk_split_esb, CONFIG_ZMK_SPLIT_ESB_LOG_LEVEL);
 
 /* Per pipe, not shared: saturated ACK FIFO (powered-off peripheral) stalls only
  * its own queue, never head-of-line blocking the others. */
@@ -55,19 +57,33 @@ uint8_t esb_link_source_ids(uint8_t *out_ids) {
 }
 
 int esb_link_stage_reply(uint8_t pipe, const uint8_t *data, size_t length) {
+     LOG_INF("3333 Staging reply to pipe %u:", pipe);
     if (pipe >= REPLY_PIPE_COUNT) {
         return -EINVAL;
     }
     if (length > CONFIG_ZMK_SPLIT_ESB_MAX_PAYLOAD) {
         return -EMSGSIZE;
     }
+
+   if (length == 33) {
+        LOG_INF("esb_link_stage_reply:");
+        LOG_HEXDUMP_INF(data, length, "payload:44");
+    }
+
     struct esb_link_packet packet = {0};
     packet.pipe = pipe;
     packet.length = (uint8_t)length;
     if (length > 0) {
         memcpy(packet.data, data, length);
     }
+    // LOG_INF("4444 Staging reply to pipe %u:", pipe);
+
+      if (length == 33) {
+        LOG_INF("ledS PUT TO QUEUE");
+    }
+
     if (k_msgq_put(reply_queue[pipe], &packet, K_NO_WAIT) != 0) {
+        // LOG_ERR("3333 Failed to stage reply to pipe %u", pipe);
         return -ENOBUFS;
     }
     return 0;
@@ -76,13 +92,12 @@ int esb_link_stage_reply(uint8_t pipe, const uint8_t *data, size_t length) {
 int esb_link_role_start(void) {
     return esb_start_rx();
 }
-#include <zephyr/logging/log.h>
-LOG_MODULE_DECLARE(zmk_split_esb, CONFIG_ZMK_SPLIT_ESB_LOG_LEVEL);
+
 /* ISR-only, so esb_write_payload has a single caller context, no lock. */
 void esb_link_role_rx_done(void) {
     for (uint8_t pipe = 0; pipe < REPLY_PIPE_COUNT; pipe++) {
         struct esb_link_packet packet;
-        while (k_msgq_peek(reply_queue[pipe], &packet) == 0) {
+        while (k_msgq_get(reply_queue[pipe], &packet,K_NO_WAIT) == 0) {
             // LOG_HEXDUMP_INF(packet.data, packet.length, "3333 ACK payload");
 
 bool is_known_packet = false;
@@ -107,21 +122,28 @@ bool is_known_packet = false;
                 }
             }
             
-            if (!is_known_packet) {
-                LOG_INF("3333 ACK payload to pipe %u:", pipe);
-                LOG_HEXDUMP_INF(packet.data, packet.length, "ACK data:");
-            }
+            // if (!is_known_packet) {
+            //     LOG_INF("3333 ACK packet.pipe %d payload to pipe %u: REPLY_PIPE_COUNT %d",
+            //          packet.pipe,pipe,REPLY_PIPE_COUNT);
+                LOG_HEXDUMP_INF(packet.data, 8, "ACK data:");
+            // }
 
             struct esb_payload payload = {0};
             payload.pipe = packet.pipe;
-            payload.length = packet.length;
+            payload.length = 8;
             if (packet.length > 0) {
-                memcpy(payload.data, packet.data, packet.length);
+                memcpy(payload.data, packet.data, 8);
             }
-            if (esb_write_payload(&payload) != 0) {
-                break; /* this pipe's ACK FIFO is full, retry on its next RX */
+            
+            esb_flush_tx();
+           int ret = esb_write_payload(&payload) ;
+            if (ret== -ENOMEM) {
+                LOG_ERR("3333 Failed to write reply to pipe %u, len=%u, err=%d", 
+                packet.pipe, payload.length, ret);
+                // break;
+                // break; /* this pipe's ACK FIFO is full, retry on its next RX */
             }
-            (void)k_msgq_get(reply_queue[pipe], &packet, K_NO_WAIT);
+            // (void)k_msgq_get(reply_queue[pipe], &packet, K_NO_WAIT);
         }
     }
 }

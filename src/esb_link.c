@@ -117,7 +117,7 @@ static FUNC_NORETURN void rx_thread_fn(void *unused_a, void *unused_b, void *unu
         }
     }
 }
-
+uint32_t cnt_rx_packets = 0;
 /* Runs in the ESB IRQ: only move bytes into queues, defer the ZMK handoff. */
 static void on_esb_event(const struct esb_evt *event) {
     switch (event->evt_id) {
@@ -125,6 +125,7 @@ static void on_esb_event(const struct esb_evt *event) {
         bool received = false;
         struct esb_payload payload;
         // LOG_INF("333333333");
+        //目前这里是rx专用的,因为开启了start rx主机这里,这个事件才触发
         while (esb_read_rx_payload(&payload) == 0) {
             if (hop_consume_rx(payload.pipe, payload.data, payload.length, payload.rssi)) {
                 continue; /* control packet (keepalive or beacon), not queued */
@@ -139,9 +140,12 @@ static void on_esb_event(const struct esb_evt *event) {
             memcpy(slot->data, payload.data, slot->length);
             spsc_produce(&rx_spsc);
             received = true;
-            //  LOG_INF("RX pipe=%u len=%u rssi=%d", 
-            //     payload.pipe, payload.length, payload.rssi);
-            //  LOG_HEXDUMP_INF(payload.data, payload.length, "RX data:");
+            if(cnt_rx_packets++ % 100 == 0){
+             LOG_INF("RX pipe=%u len=%u rssi=%d", 
+                payload.pipe, payload.length, payload.rssi);
+             LOG_HEXDUMP_INF(payload.data, payload.length, "RX data:");
+            }
+
         }
         if (received) {
             k_sem_give(&rx_sem);
@@ -150,6 +154,21 @@ static void on_esb_event(const struct esb_evt *event) {
         break;
     }
     case ESB_EVENT_TX_SUCCESS:
+        // 此时可以读取对端在ACK中返回的数据
+        #ifndef CONFIG_ZMK_SPLIT_ROLE_CENTRAL  // ✅ 正确，不加括号
+            struct esb_payload ack_rx;
+            // LOG_INF("TX111 ACK received: "  );
+            while (esb_read_rx_payload(&ack_rx) == 0) {
+                // ack_rx.data 包含了对端在ACK中发回的数据
+                // 这就是"反向通道"收到的数据
+                // LOG_INF("TX222 ACK received: pipe=%u length=%u", 
+                //     ack_rx.pipe, ack_rx.length);
+            
+                // 打印原始数据（十六进制）
+                // LOG_HEXDUMP_INF(ack_rx.data, 8, "ACK data:");
+                process_ack_payload(ack_rx.data, ack_rx.length);
+            }
+          #endif
         esb_link_mark_tx_event();
         hop_note_tx_success((uint8_t)event->tx_attempts);
         break;
@@ -195,7 +214,8 @@ static int esb_link_radio_setup(void) {
             address_length > 2 ? base_address[2] : 0,
             address_length > 3 ? base_address[3] : 0,
             address_length > 4 ? base_address[4] : 0);
-LOG_INF("peripheral_prefixes[0]: 0x%02X", peripheral_prefixes[0]);
+   LOG_INF("peripheral_prefixes[0]: 0x%02X", peripheral_prefixes[0]);
+LOG_INF("peripheral_prefixes[1]: 0x%02X", peripheral_prefixes[1]);
     int set_error = esb_set_address_length(address_length);
     if (set_error) {
         LOG_DBG("esb_set_address_length returned %d", set_error);

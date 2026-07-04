@@ -59,3 +59,5 @@ uint8_t esb_link_source_ids(uint8_t *out_ids);
  * Returns -ENOBUFS if the reply queue is full. */
 int esb_link_stage_reply(uint8_t pipe, const uint8_t *data, size_t length);
 #endif
+
+void process_ack_payload(const uint8_t *data, uint8_t length) ;

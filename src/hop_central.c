@@ -128,11 +128,13 @@ static bool any_pipe_served(void) {
 }
 
 static void stage_beacon_to(uint8_t pipe) {
-    struct esb_beacon beacon = {.tag = ESB_BEACON_TAG,
-                                .epoch = hop_epoch,
-                                .rssi_dbm = pipe_rssi_dbm[pipe],
-                                .mask_version = mask_version};
-    (void)esb_link_stage_reply(pipe, (const uint8_t *)&beacon, sizeof(beacon));
+    // struct esb_beacon beacon = {.tag = ESB_BEACON_TAG,
+    //                             .epoch = hop_epoch,
+    //                             .rssi_dbm = pipe_rssi_dbm[pipe],
+    //                             .mask_version = mask_version};
+                                
+    // LOG_INF("777 Staging beacon to pipe %d", pipe);
+    // (void)esb_link_stage_reply(pipe, (const uint8_t *)&beacon, sizeof(beacon));
 }
 
 /* Beacons the live epoch to lost pipes, so one camped on the anchor reads it
@@ -282,7 +284,7 @@ static void stage_mask_update(void) {
         if (pipe_needs_rendezvous(pipe)) {
             continue; /* rejoins via anchor beacon, not a stale-channel mask reply */
         }
-        (void)esb_link_stage_reply(pipe, (const uint8_t *)&update, ESB_MASK_UPDATE_LENGTH);
+        // (void)esb_link_stage_reply(pipe, (const uint8_t *)&update, ESB_MASK_UPDATE_LENGTH);
     }
 }
 

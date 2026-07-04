@@ -21,6 +21,9 @@ if(CONFIG_ZMK_SPLIT_ESB)
       -fanalyzer
       -Wno-error=unused-function
       -Wno-error=unused-const-variable
+      -Wno-error=unused-parameter  # 把 unused-parameter 从错误降级为警告
+      -Wno-error=missing-prototypes
+      -Wno-error=unused-variable
   )
   zephyr_library_sources(src/esb_keepalive.c)
   zephyr_library_sources(src/esb_link.c)

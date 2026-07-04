@@ -39,6 +39,10 @@ static enum zmk_split_transport_connections_status central_connections_status(vo
 
 static int central_send_command(uint8_t source,
                                 struct zmk_split_transport_central_command command) {
+    // LOG_WRN("22 spayload len is  %d max len is % d ,pip is %d", 
+    //     sizeof(command),CONFIG_ZMK_SPLIT_ESB_MAX_PAYLOAD,
+    //         source);
+//    LOG_HEXDUMP_INF(&command, sizeof(command), "command:");
     return esb_link_stage_reply(source, (const uint8_t *)&command, sizeof(command));
 }
 

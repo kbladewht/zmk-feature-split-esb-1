@@ -59,6 +59,9 @@ static const uint8_t self_pipe = DT_PROP(DT_CHOSEN(zmk_esb_self), pipe);
     }
 
 int esb_link_send(const uint8_t *data, size_t length, bool ack) {
+
+// LOG_INF("TX11111 : esb_link_send %d",             self_pipe);
+
     if (length > CONFIG_ZMK_SPLIT_ESB_MAX_PAYLOAD) {
         return -EMSGSIZE;
     }
@@ -88,5 +91,7 @@ int esb_link_role_start(void) {
     return 0;
 }
 
+//从机不需要处理rxdone
 void esb_link_role_rx_done(void) {
+    // LOG_DBG("tx part 8888 : rx done");
 }
