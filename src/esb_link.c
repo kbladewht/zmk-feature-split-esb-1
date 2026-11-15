@@ -89,39 +89,17 @@ static void on_esb_event(nrf_esb_evt_t const *event) {
     switch (event->evt_id) {
     case NRF_ESB_EVENT_RX_RECEIVED: {
         bool received = false;
-        uint8_t pipes_acked = 0;
+        // uint8_t pipes_acked = 0;
         uint32_t drained = 0;
         nrf_esb_payload_t payload;
+         LOG_INF("xxxxx111 received on pipe %d", 1);
         while (esb_link_nrf_status_to_errno(nrf_esb_read_rx_payload(&payload)) == 0) {
             drained++;
             LOG_INF("xxxxx received on pipe %d", payload.pipe);
-            if (payload.noack == 0) {
-                pipes_acked |= (uint8_t)BIT(payload.pipe);
-                esb_stat_reply_asked(payload.pipe);
-            }
-            if (hop_consume_rx(payload.pipe, payload.data, payload.length, payload.rssi)) {
-                continue;
-            }
-            struct esb_link_packet *slot = spsc_acquire(&rx_spsc);
-            if (slot == NULL) {
-                LOG_DBG("RX ring full, dropping packet");
-                esb_stat_add(ESB_STAT_RX_RING_DROPPED, 1);
-                continue; /* keep draining the radio FIFO */
-            }
-            slot->pipe = payload.pipe;
-            slot->length = payload.length;
-            memcpy(slot->data, payload.data, slot->length);
-            spsc_produce(&rx_spsc);
+        
             received = true;
         }
-        if (received) {
-            k_sem_give(&rx_sem);
-        }
-        esb_stat_peak(ESB_STAT_RX_PEAK, drained);
-        if (drained >= CONFIG_ZMK_SPLIT_ESB_RX_FIFO_SIZE) {
-            esb_stat_add(ESB_STAT_RX_FULL, 1);
-        }
-        esb_link_role_rx_done(pipes_acked);
+     
         break;
     }
     case NRF_ESB_EVENT_TX_SUCCESS:

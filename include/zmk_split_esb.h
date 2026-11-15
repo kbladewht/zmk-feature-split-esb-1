@@ -18,6 +18,9 @@ struct zmk_split_esb_status {
     bool config_mismatch;
 };
 
+/* Start the central ESB radio. Safe to call once Vial initialization completes. */
+int zmk_split_esb_start(void);
+
 /* Lock-free snapshot of local link state.
  * rssi_dbm is received signal, never own transmit.
  * attempts_ewma_x10 is delivery cost, 10 = every packet on first try.

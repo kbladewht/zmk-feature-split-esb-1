@@ -16,6 +16,7 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/settings/settings.h>
 #include <zephyr/sys/__assert.h>
+#include <zephyr/sys/atomic.h>
 
 #include <zmk/endpoints_types.h>
 #include <zmk/events/battery_state_changed.h>
@@ -25,6 +26,7 @@
 #include <zmk/split/central.h>
 #include <zmk/split/transport/central.h>
 #include <zmk/split/transport/types.h>
+#include <zmk_split_esb.h>
 
 #include "central.h"
 #include "central_input.h"
@@ -51,6 +53,8 @@ BUILD_ASSERT(!IS_ENABLED(CONFIG_ZMK_SPLIT_PERIPHERAL_HID_INDICATORS)
 
 static bool transport_enabled;
 static zmk_split_transport_central_status_changed_cb_t status_cb;
+static atomic_t radio_start_state;
+static int radio_start_error;
 
 static enum zmk_split_transport_connections_status central_connections_status(void);
 
@@ -478,6 +482,26 @@ void central_ingest_packet(uint8_t pipe, const uint8_t *data, size_t length) {
     }
 }
 
+int zmk_split_esb_start(void) {
+    if (atomic_get(&radio_start_state) == 2) {
+        return radio_start_error;
+    }
+    if (!atomic_cas(&radio_start_state, 0, 1)) {
+        return atomic_get(&radio_start_state) == 2 ? radio_start_error : -EBUSY;
+    }
+
+    radio_start_error = esb_link_hfclk_acquire();
+    if (radio_start_error == 0) {
+        hop_boot_mask();
+        radio_start_error = esb_link_init(central_ingest_packet);
+    }
+    if (radio_start_error != 0) {
+        esb_link_hfclk_release();
+    }
+    atomic_set(&radio_start_state, 2);
+    return radio_start_error;
+}
+
 static int central_init(void) {
     /* Zero-init would swallow a first 0% report. */
     for (uint8_t pipe = 0; pipe < ESB_LINK_PIPE_MAX; pipe++) {
@@ -493,12 +517,11 @@ static int central_init(void) {
             LOG_WRN("hop mask restore skipped (%d)", settings_error);
         }
     }
-    int clock_error = esb_link_hfclk_acquire();
-    if (clock_error) {
-        return clock_error;
+    if (IS_ENABLED(CONFIG_ZMK_SPLIT_ESB_INIT_AFTER_VIAL)) {
+        LOG_INF("Deferring ESB radio startup until Vial is ready");
+        return 0;
     }
-    hop_boot_mask();
-    return esb_link_init(central_ingest_packet);
+    return zmk_split_esb_start();
 }
 
 SYS_INIT(central_init, APPLICATION, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT);

@@ -45,6 +45,11 @@ CONFIG_ESB=n
 The module supports the central role only; peripheral endpoints require a separate
 compatible implementation. Set `CONFIG_ZMK_SPLIT_ROLE_CENTRAL=y` on the central.
 
+For applications that initialize Vial after USB enumeration, set
+`CONFIG_ZMK_SPLIT_ESB_INIT_AFTER_VIAL=y` and call `zmk_split_esb_start()` when
+Vial initialization has completed. This keeps radio setup and the boot channel
+survey from running before Vial is ready.
+
 The module directly uses the vendored nRF5 SDK 17.1 `nrf_esb` API; it does not
 select or depend on NCS ESB or MPSL. Provide the SDK root for its support headers.
 The SDK's `nrf_esb.c` and headers are copied into `src/standalone_esb/nrf5sdk`

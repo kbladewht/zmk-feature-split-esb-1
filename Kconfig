@@ -17,6 +17,13 @@ config ZMK_SPLIT_ESB_NRF5_SDK_PATH
     help
       Path to the nRF5 SDK 17.1.0 directory containing components/proprietary_rf/esb.
 
+config ZMK_SPLIT_ESB_INIT_AFTER_VIAL
+    bool "Start the ESB radio after Vial initialization"
+    default n
+    help
+      Defer central ESB radio startup until the application calls
+      zmk_split_esb_start() after Vial initialization is complete.
+
 config ZMK_SPLIT_ESB_MAX_PAYLOAD
     int "Max on-air payload bytes"
     default 48
