@@ -40,8 +40,9 @@ static const uint8_t peripheral_pipes[] = {
 static const uint8_t address_length = DT_INST_PROP(0, address_length);
 static const int8_t tx_power_dbm = DT_INST_PROP(0, tx_power_dbm);
 
+static nrf_esb_payload_t rx_payload;
 
-void nrf_esb_event_handler_n(nrf_esb_evt_t const *p_event)
+static void nrf_esb_event_handler_n(nrf_esb_evt_t const *p_event)
 {
     switch (p_event->evt_id) {
         case NRF_ESB_EVENT_TX_SUCCESS:
@@ -52,6 +53,8 @@ void nrf_esb_event_handler_n(nrf_esb_evt_t const *p_event)
             if (nrf_esb_read_rx_payload(&rx_payload) == NRF_SUCCESS) {
                 LOG_INF("Received payload on pipe %d, length %d", rx_payload.pipe, rx_payload.length);
             }
+            break;
+        default:
             break;
     }
 }
