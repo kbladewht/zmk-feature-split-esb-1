@@ -34,18 +34,13 @@ static const uint8_t peripheral_pipes[] = {
     DT_FOREACH_CHILD_STATUS_OKAY(ESB_PERIPHERALS, PERIPHERAL_PIPE)
 };
 #define PERIPHERAL_COUNT ARRAY_SIZE(peripheral_pipes)
-BUILD_ASSERT(sizeof(base_address_0) == 4, "ESB base address 0 must be exactly 4 bytes");
-BUILD_ASSERT(sizeof(base_address_1) == 4, "ESB base address 1 must be exactly 4 bytes");
-BUILD_ASSERT(PERIPHERAL_COUNT <= ARRAY_SIZE(peripheral_prefixes),
-             "hardcoded ESB prefixes support at most three pipes");
+
 
 static const uint8_t address_length = DT_INST_PROP(0, address_length);
 static const int8_t tx_power_dbm = DT_INST_PROP(0, tx_power_dbm);
 static const uint16_t retransmit_count = DT_INST_PROP(0, retransmit_count);
 static const uint16_t retransmit_delay_us = DT_INST_PROP(0, retransmit_delay_us);
 static const bool use_fast_ramp_up = DT_INST_PROP(0, use_fast_ramp_up);
-static const uint8_t crc_bits = DT_INST_PROP(0, crc_bits);
-static const uint16_t bitrate_kbps = DT_INST_PROP(0, bitrate_kbps);
 
 BUILD_ASSERT(PERIPHERAL_COUNT >= 1, "peripherals needs at least one entry");
 BUILD_ASSERT(PERIPHERAL_COUNT <= CONFIG_ESB_PIPE_COUNT,
@@ -56,29 +51,7 @@ BUILD_ASSERT(PIPE_BIT_SUM == (1u << DT_CHILD_NUM_STATUS_OKAY(ESB_PERIPHERALS)) -
              "peripheral pipes must be exactly 0..N-1, one per peripheral");
 const uint8_t esb_link_pipe_count = (uint8_t)PERIPHERAL_COUNT;
 
-static enum esb_crc esb_crc_from_bits(uint8_t bits) {
-    switch (bits) {
-    case 0:
-        return ESB_CRC_OFF;
-    case 8:
-        return ESB_CRC_8BIT;
-    case 16:
-        return ESB_CRC_16BIT;
-    default:
-        return ESB_CRC_16BIT;
-    }
-}
 
-static enum esb_bitrate esb_bitrate_from_kbps(uint16_t kbps) {
-    switch (kbps) {
-    case 1000:
-        return ESB_BITRATE_1MBPS;
-    case 2000:
-        return ESB_BITRATE_2MBPS;
-    default:
-        return ESB_BITRATE_2MBPS;
-    }
-}
 
 /* NCS's CONFIG_ESB_MAX_PAYLOAD_LENGTH default (32) wins over ours on Kconfig parse order.
  * Equal sizes make the radio drop whole any packet the RX slot cannot hold. */
@@ -220,10 +193,10 @@ int esb_link_init(esb_link_rx_callback_t callback) {
 
     struct esb_config config = ESB_DEFAULT_CONFIG;
     config.protocol = ESB_PROTOCOL_ESB_DPL;
-    config.mode = ESB_LINK_ROLE_MODE;
+    config.mode = ESB_MODE_PRX;
     config.event_handler = on_esb_event;
-    config.bitrate = esb_bitrate_from_kbps(bitrate_kbps);
-    config.crc = esb_crc_from_bits(crc_bits);
+    config.bitrate = ESB_BITRATE_1MBPS;
+    config.crc = ESB_CRC_16BIT;
     config.retransmit_count = retransmit_count;
     config.retransmit_delay = retransmit_delay_us;
     /* Reverse channel replies ride on ACKs requested by peripherals. */
