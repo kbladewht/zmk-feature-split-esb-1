@@ -424,7 +424,7 @@ CONFIG_ZMK_SPLIT_ESB_LOG_LEVEL_DBG=y
 
 | Field | Device | Meaning |
 |---|---|---|
-| `rx queue peak` | every | most packets one drain took from the radio's RX FIFO, of `CONFIG_ESB_RX_FIFO_SIZE` |
+| `rx queue peak` | every | most packets one drain took from the radio's RX FIFO, of `CONFIG_ZMK_SPLIT_ESB_RX_FIFO_SIZE` |
 | `full` | every | drains that found the RX FIFO full, a packet arriving while full is dropped unacked |
 | `ring dropped` | every | packets lost with the ring to the dispatch thread full |
 | `pipe N rx` | central | packets heard on pipe N |

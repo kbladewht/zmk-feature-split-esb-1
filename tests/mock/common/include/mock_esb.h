@@ -24,8 +24,7 @@ void mock_esb_rx_raise(void);
 void mock_esb_tx_success(uint32_t attempts);
 void mock_esb_tx_failed(void);
 
-/* Last channel esb_set_rf_channel took, 0 before the first.
- * Busy radio refuses a channel with -EBUSY, as NCS does without fast channel switching. */
+/* Last channel set by the radio, 0 before the first. Busy radio refuses channel changes. */
 uint32_t mock_esb_channel(void);
 
 /* Last count passed to esb_set_retransmit_count, 0 before the first. */

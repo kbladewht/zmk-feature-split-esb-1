@@ -1,12 +1,7 @@
 # Copyright 2026 Roman Kuzmitskii (@damex)
 # SPDX-License-Identifier: MIT
 
-# Legacy-shaped ESB symbols used only by the test radio mock.
-
-menuconfig ESB
-    bool "Enhanced ShockBurst"
-
-if ESB
+# Legacy-shaped size symbols used only by the test radio mock.
 
 config ESB_MAX_PAYLOAD_LENGTH
     int "Maximum payload size"
@@ -25,5 +20,3 @@ config ESB_PIPE_COUNT
     int "Maximum number of pipes"
     default 8
     range 1 8
-
-endif

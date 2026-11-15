@@ -4,6 +4,8 @@
 /* ESB radio link, shared radio setup and RX dispatch. */
 #define DT_DRV_COMPAT zmk_split_esb
 
+#include <string.h>
+
 #include <zephyr/kernel.h>
 #include <zephyr/irq.h>
 #include <zephyr/logging/log.h>
