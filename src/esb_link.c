@@ -31,7 +31,7 @@ BUILD_ASSERT(DT_HAS_COMPAT_STATUS_OKAY(zmk_split_esb),
 
 static const uint8_t base_address_0[] = {0xE7, 0xE7, 0xE7, 0xE7};
 static const uint8_t base_address_1[] = {0xC2, 0xC2, 0xC2, 0xC2};
-static const uint8_t peripheral_prefixes[] = {0xE7, 0xC2, 0xC3};
+static const uint8_t peripheral_prefixes[] = {0xE7, 0xC2, 0xA7, 0xA2};
 #define PERIPHERAL_PIPE(node) [DT_PROP(node, pipe)] = 1,
 static const uint8_t peripheral_pipes[] = {
     DT_FOREACH_CHILD_STATUS_OKAY(ESB_PERIPHERALS, PERIPHERAL_PIPE)
@@ -49,6 +49,9 @@ static const int8_t tx_power_dbm = DT_INST_PROP(0, tx_power_dbm);
 BUILD_ASSERT(PIPE_BIT_SUM == (1u << DT_CHILD_NUM_STATUS_OKAY(ESB_PERIPHERALS)) - 1u,
              "peripheral pipes must be exactly 0..N-1, one per peripheral");
 const uint8_t esb_link_pipe_count = (uint8_t)PERIPHERAL_COUNT;
+
+BUILD_ASSERT(PERIPHERAL_COUNT <= ARRAY_SIZE(peripheral_prefixes),
+             "the nRF5 SDK 17.1 receiver address table supports up to four pipes");
 
 /* RX path: the radio ISR writes each payload straight into a lock-free SPSC ring
  * (no irq_lock, zero-copy slot) and signals the dispatch thread, which hands packets
@@ -147,27 +150,37 @@ static __noinline int esb_link_radio_setup(void) {
     int set_error =
         esb_link_nrf_status_to_errno(nrf_esb_set_address_length(address_length));
     if (set_error) {
-        LOG_INF("esb_set_address_length returned %d", set_error);
+        LOG_ERR("nrf_esb_set_address_length failed (%d)", set_error);
+        return set_error;
     }
     LOG_HEXDUMP_INF(base_address_0, sizeof(base_address_0), "addr0");
     set_error = esb_link_nrf_status_to_errno(nrf_esb_set_base_address_0(base_address_0));
-    LOG_INF("esb_set_base_address_0 returned %d", set_error);
+    if (set_error) {
+        LOG_ERR("nrf_esb_set_base_address_0 failed (%d)", set_error);
+        return set_error;
+    }
     LOG_HEXDUMP_INF(base_address_1, sizeof(base_address_1), "addr1");
     set_error = esb_link_nrf_status_to_errno(nrf_esb_set_base_address_1(base_address_1));
-    LOG_INF("esb_set_base_address_1 returned %d", set_error);
+    if (set_error) {
+        LOG_ERR("nrf_esb_set_base_address_1 failed (%d)", set_error);
+        return set_error;
+    }
     set_error = esb_link_nrf_status_to_errno(
         nrf_esb_set_prefixes(peripheral_prefixes, (uint8_t)PERIPHERAL_COUNT));
     if (set_error) {
-        LOG_INF("esb_set_prefixes returned %d", set_error);
+        LOG_ERR("nrf_esb_set_prefixes failed (%d)", set_error);
+        return set_error;
     }
     set_error = esb_link_nrf_status_to_errno(nrf_esb_set_rf_channel(hop_current_channel()));
     if (set_error) {
-        LOG_DBG("esb_set_rf_channel returned %d", set_error);
+        LOG_ERR("nrf_esb_set_rf_channel failed (%d)", set_error);
+        return set_error;
     }
     set_error =
         esb_link_nrf_status_to_errno(nrf_esb_set_tx_power((nrf_esb_tx_power_t)tx_power_dbm));
     if (set_error) {
-        LOG_DBG("esb_set_tx_power returned %d", set_error);
+        LOG_ERR("nrf_esb_set_tx_power failed (%d)", set_error);
+        return set_error;
     }
     return esb_link_role_start();
 }
@@ -221,7 +234,7 @@ int esb_link_init(esb_link_rx_callback_t callback) {
     config.event_handler = on_esb_event;
     config.bitrate = NRF_ESB_BITRATE_1MBPS;
     config.crc = NRF_ESB_CRC_16BIT;
-    config.retransmit_count = 2;
+    config.tx_output_power = NRF_ESB_TX_POWER_0DBM;
     config.payload_length = 0;
     config.retransmit_delay = 250;
     config.radio_irq_priority = CONFIG_ZMK_SPLIT_ESB_RADIO_IRQ_PRIORITY;
@@ -240,7 +253,11 @@ int esb_link_init(esb_link_rx_callback_t callback) {
         LOG_ERR("nrf_esb_init failed (%d)", error);
         return error;
     }
-    (void)nrf_esb_set_rf_channel(26);
+    error = esb_link_nrf_status_to_errno(nrf_esb_set_rf_channel(26));
+    if (error) {
+        LOG_ERR("nrf_esb_set_rf_channel failed (%d)", error);
+        return error;
+    }
     LOG_INF("ESB esb_link_radio_setup  11111");
     error = esb_link_radio_setup();
     LOG_INF("esb_link_radio_setup  22222");
