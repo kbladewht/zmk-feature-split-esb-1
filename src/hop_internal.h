@@ -14,7 +14,12 @@
 #include <zephyr/devicetree.h>
 #include <zephyr/sys/util.h>
 
+/* Temporary P42-C diagnostic override: keep hopping state single-channel. */
+#if defined(CONFIG_SHIELD_P42_C)
+#define HOP_COUNT 1
+#else
 #define HOP_COUNT DT_INST_PROP_LEN(0, hop_channels)
+#endif
 #define ESB_HOP_MASK_BYTES (((size_t)HOP_COUNT + 7) / 8)
 
 /* Tag-routed, not length-routed: a mask-update length can equal the beacon's. */

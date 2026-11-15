@@ -14,33 +14,10 @@
 #include "hop_internal.h"
 #include "hop_policy.h"
 
-static const uint8_t hop_channels[] = DT_INST_PROP(0, hop_channels);
-BUILD_ASSERT(HOP_COUNT >= 1, "hop-channels needs at least one channel");
-uint8_t hop_index;
+/* Temporary RX/ACK crash isolation: pin P42-C to channel 26. */
+static const uint8_t hop_channels[] = {26};
 
-/* Retune with the ISR masked: esb_stop_rx() briefly nulls the radio disabled-callback,
- * and a DISABLED event landing there mid-reconfigure faults the device.
- * Skip the work when the channel is unchanged, so a redundant retune never tears down RX.
- * Boot sentinel: esb_link_radio_setup tunes without updating applied_index. */
-BUILD_ASSERT(HOP_COUNT < UINT8_MAX, "sentinel needs one spare index value");
-static uint8_t applied_index = UINT8_MAX;
-static void apply_channel_index(uint8_t index) {
-    if (index == applied_index) {
-        return;
-    }
-    unsigned int key = irq_lock();
-    esb_stop_rx();
-    int set_error = esb_set_rf_channel(hop_channels[index]);
-    esb_start_rx();
-    irq_unlock(key);
-    if (set_error == 0) {
-        applied_index = index;
-    }
-}
 
-void apply_hop_channel(void) {
-    apply_channel_index(hop_index);
-}
 
 uint8_t hop_current_channel(void) {
     return hop_channels[hop_index];

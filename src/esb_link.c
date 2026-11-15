@@ -38,9 +38,7 @@ static const uint8_t peripheral_pipes[] = {
 
 static const uint8_t address_length = DT_INST_PROP(0, address_length);
 static const int8_t tx_power_dbm = DT_INST_PROP(0, tx_power_dbm);
-static const uint16_t retransmit_count = DT_INST_PROP(0, retransmit_count);
-static const uint16_t retransmit_delay_us = DT_INST_PROP(0, retransmit_delay_us);
-static const bool use_fast_ramp_up = DT_INST_PROP(0, use_fast_ramp_up);
+
 
 BUILD_ASSERT(PERIPHERAL_COUNT >= 1, "peripherals needs at least one entry");
 BUILD_ASSERT(PERIPHERAL_COUNT <= CONFIG_ESB_PIPE_COUNT,
@@ -195,21 +193,21 @@ int esb_link_init(esb_link_rx_callback_t callback) {
     config.protocol = ESB_PROTOCOL_ESB_DPL;
     config.mode = ESB_MODE_PRX;
     config.event_handler = on_esb_event;
-    config.bitrate = ESB_BITRATE_1MBPS;
+    config.bitrate = ESB_BITRATE_2MBPS;
     config.crc = ESB_CRC_16BIT;
-    config.retransmit_count = retransmit_count;
-    config.retransmit_delay = retransmit_delay_us;
+    config.retransmit_count = 2;
+    config.retransmit_delay = 250;
     /* Reverse channel replies ride on ACKs requested by peripherals. */
     config.selective_auto_ack = true;
     config.tx_mode = ESB_TXMODE_AUTO;
-    config.use_fast_ramp_up = use_fast_ramp_up;
+    config.use_fast_ramp_up = false;
 
     error = esb_init(&config);
     if (error) {
         LOG_ERR("esb_init failed (%d)", error);
         return error;
     }
-
+    esb_set_rf_channel(26);
     error = esb_link_radio_setup();
     if (error) {
         return error;

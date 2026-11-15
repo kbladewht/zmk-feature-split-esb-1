@@ -8,7 +8,6 @@
 
 #include <esb.h>
 
-#define ESB_LINK_ROLE_MODE ESB_MODE_PRX
 
 #define ESB_LINK_PIPE_MAX 8 /* ESB hardware pipe count */
 
