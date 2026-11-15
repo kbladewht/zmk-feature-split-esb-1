@@ -193,12 +193,12 @@ int esb_link_init(esb_link_rx_callback_t callback) {
     config.protocol = ESB_PROTOCOL_ESB_DPL;
     config.mode = ESB_MODE_PRX;
     config.event_handler = on_esb_event;
-    config.bitrate = ESB_BITRATE_2MBPS;
+    config.bitrate = ESB_BITRATE_1MBPS;
     config.crc = ESB_CRC_16BIT;
     config.retransmit_count = 2;
     config.retransmit_delay = 250;
     /* Reverse channel replies ride on ACKs requested by peripherals. */
-    config.selective_auto_ack = true;
+    config.selective_auto_ack = false;
     config.tx_mode = ESB_TXMODE_AUTO;
     config.use_fast_ramp_up = false;
 
