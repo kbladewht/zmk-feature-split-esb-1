@@ -64,7 +64,6 @@ static K_THREAD_STACK_DEFINE(rx_thread_stack, RX_THREAD_STACK_SIZE);
 static struct k_thread rx_thread;
 
 static esb_link_rx_callback_t rx_callback;
-static atomic_t link_ready;
 
 /* Dedicated dispatch thread: drain the SPSC and hand each packet to the role layer.
  * Off the shared system workqueue so a high RX rate isn't gated by unrelated work. */
