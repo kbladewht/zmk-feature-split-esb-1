@@ -121,78 +121,18 @@ static void on_esb_event(nrf_esb_evt_t const *event) {
         break;
     }
 }
-
-
-static __noinline int esb_link_radio_setup(void) {
-    LOG_INF("esb_link_radio_setup  33333");
-    int set_error =
-        esb_link_nrf_status_to_errno(nrf_esb_set_address_length(address_length));
-    if (set_error) {
-        LOG_ERR("nrf_esb_set_address_length failed (%d)", set_error);
-        return set_error;
-    }
-    LOG_HEXDUMP_INF(base_address_0, sizeof(base_address_0), "addr0");
-    set_error = esb_link_nrf_status_to_errno(nrf_esb_set_base_address_0(base_address_0));
-    if (set_error) {
-        LOG_ERR("nrf_esb_set_base_address_0 failed (%d)", set_error);
-        return set_error;
-    }
-    LOG_HEXDUMP_INF(base_address_1, sizeof(base_address_1), "addr1");
-    set_error = esb_link_nrf_status_to_errno(nrf_esb_set_base_address_1(base_address_1));
-    if (set_error) {
-        LOG_ERR("nrf_esb_set_base_address_1 failed (%d)", set_error);
-        return set_error;
-    }
-    set_error = esb_link_nrf_status_to_errno(
-        nrf_esb_set_prefixes(peripheral_prefixes, (uint8_t)PERIPHERAL_COUNT));
-    if (set_error) {
-        LOG_ERR("nrf_esb_set_prefixes failed (%d)", set_error);
-        return set_error;
-    }
-    set_error = esb_link_nrf_status_to_errno(nrf_esb_set_rf_channel(hop_current_channel()));
-    if (set_error) {
-        LOG_ERR("nrf_esb_set_rf_channel failed (%d)", set_error);
-        return set_error;
-    }
-    set_error =
-        esb_link_nrf_status_to_errno(nrf_esb_set_tx_power((nrf_esb_tx_power_t)tx_power_dbm));
-    if (set_error) {
-        LOG_ERR("nrf_esb_set_tx_power failed (%d)", set_error);
-        return set_error;
-    }
-    return esb_link_role_start();
+typedef void (*esb_handler_t)(nrf_esb_payload_t payload);
+void radio_rx_start(esb_handler_t handler)
+{
+    // m_handler_n = handler;
+    uint32_t err_code = nrf_esb_start_rx();
+    APP_ERROR_CHECK(err_code);
 }
+static void esb_rx_data_cb(nrf_esb_payload_t payload)
+{
+    LOG_DBG("esb_rx_data_cb pipe=%u length=%u", payload.pipe, payload.length);
 
-#if defined(ZMK_SPLIT_ESB_TEST_MOCK)
-static int connect_irq_handlers(void) {
-    return 0;
 }
-#else
-extern void RADIO_IRQHandler(void);
-extern void ESB_EVT_IRQHandler(void);
-
-static void radio_irq_wrapper(const void *arg) {
-    ARG_UNUSED(arg);
-    RADIO_IRQHandler();
-}
-
-static void esb_event_irq_wrapper(const void *arg) {
-    ARG_UNUSED(arg);
-    ESB_EVT_IRQHandler();
-}
-
-static int connect_irq_handlers(void) {
-    int error = irq_connect_dynamic(RADIO_IRQn, CONFIG_ZMK_SPLIT_ESB_RADIO_IRQ_PRIORITY,
-                                    radio_irq_wrapper, NULL, 0);
-    if (error < 0) {
-        return error;
-    }
-
-    error = irq_connect_dynamic(ESB_EVT_IRQ, CONFIG_ZMK_SPLIT_ESB_EVENT_IRQ_PRIORITY,
-                                esb_event_irq_wrapper, NULL, 0);
-    return error < 0 ? error : 0;
-}
-#endif
 
 int esb_link_init(esb_link_rx_callback_t callback) {
     rx_callback = callback;
@@ -206,77 +146,36 @@ int esb_link_init(esb_link_rx_callback_t callback) {
         return error;
     }
 
-    nrf_esb_config_t config = NRF_ESB_DEFAULT_CONFIG;
-    config.protocol = NRF_ESB_PROTOCOL_ESB_DPL;
-    config.mode = NRF_ESB_MODE_PRX;
-    config.event_handler = on_esb_event;
-    config.bitrate = NRF_ESB_BITRATE_1MBPS;
-    config.crc = NRF_ESB_CRC_16BIT;
-    config.tx_output_power = NRF_ESB_TX_POWER_0DBM;
-    config.payload_length = 0;
-    config.retransmit_delay = 250;
-    config.radio_irq_priority = CONFIG_ZMK_SPLIT_ESB_RADIO_IRQ_PRIORITY;
-    config.event_irq_priority = CONFIG_ZMK_SPLIT_ESB_EVENT_IRQ_PRIORITY;
+    nrf_esb_config_t nrf_esb_config = NRF_ESB_DEFAULT_CONFIG;
+    nrf_esb_config.protocol = NRF_ESB_PROTOCOL_ESB_DPL;
+    nrf_esb_config.mode = NRF_ESB_MODE_PRX;
+    nrf_esb_config.event_handler = on_esb_event;
+    nrf_esb_config.bitrate = NRF_ESB_BITRATE_1MBPS;
+    nrf_esb_config.crc = NRF_ESB_CRC_16BIT;
+    nrf_esb_config.tx_output_power = NRF_ESB_TX_POWER_0DBM;
+    nrf_esb_config.payload_length = 0;
+    nrf_esb_config.retransmit_delay = 250;
+    nrf_esb_config.radio_irq_priority = CONFIG_ZMK_SPLIT_ESB_RADIO_IRQ_PRIORITY;
+    nrf_esb_config.event_irq_priority = CONFIG_ZMK_SPLIT_ESB_EVENT_IRQ_PRIORITY;
     /* Reverse channel replies ride on ACKs requested by peripherals. */
-    config.selective_auto_ack = false;
+    nrf_esb_config.selective_auto_ack = false;
 
-    error = connect_irq_handlers();
-    if (error) {
-        LOG_ERR("ESB IRQ connection failed (%d)", error);
-        return error;
-    }
+uint8_t base_addr_0[4] = { 0xE7, 0xE7, 0xE7, 0xE7 };
+    uint8_t base_addr_1[4] = { 0xC2, 0xC2, 0xC2, 0xC2 };
+    uint8_t addr_prefix[3] = { 0xE7, 0xC2, 0xC3 };
 
-    error = esb_link_nrf_status_to_errno(nrf_esb_init(&config));
-    if (error) {
-        LOG_ERR("nrf_esb_init failed (%d)", error);
-        return error;
-    }
-    error = esb_link_nrf_status_to_errno(nrf_esb_set_rf_channel(26));
-    if (error) {
-        LOG_ERR("nrf_esb_set_rf_channel failed (%d)", error);
-        return error;
-    }
-    LOG_INF("ESB esb_link_radio_setup  11111");
-    error = esb_link_radio_setup();
-    LOG_INF("esb_link_radio_setup  22222");
-    if (error) {
-        return error;
-    }
-    hop_start();
-    atomic_set(&link_ready, 1);
-    LOG_INF("ESB link initialized, %d peripherals, %d pipes",
-             PERIPHERAL_COUNT, esb_link_pipe_count);
-    return 0;
-}
+    uint32_t err_code = nrf_esb_init(&nrf_esb_config);
 
-int esb_link_set_enabled(bool enabled) {
-    /* ZMK enables at our init priority and links first, esb_link_init starts the radio itself. */
-    if (atomic_get(&link_ready) == 0) {
-        return 0;
-    }
-    if (!enabled) {
-        hop_stop();
-        int stop_error = esb_link_nrf_status_to_errno(nrf_esb_stop_rx());
-        if (stop_error) {
-            LOG_DBG("esb_stop_rx returned %d", stop_error);
-        }
-        int flush_error = esb_link_nrf_status_to_errno(nrf_esb_flush_tx());
-        if (flush_error) {
-            LOG_DBG("esb_flush_tx returned %d", flush_error);
-        }
-        esb_stat_tx_cleared();
-        esb_link_hfclk_release();
-        return 0;
-    }
-    int acquire_error = esb_link_hfclk_acquire();
-    if (acquire_error) {
-        LOG_ERR("HFCLK start failed (%d)", acquire_error);
-        return acquire_error;
-    }
-    int start_error = esb_link_role_start();
-    if (start_error) {
-        return start_error;
-    }
-    hop_start();
+
+      nrf_esb_set_rf_channel(26);
+     nrf_esb_set_base_address_0(base_addr_0);
+    nrf_esb_set_base_address_1(base_addr_1);
+
+    
+        nrf_esb_set_prefixes(addr_prefix, 4);
+  
+    LOG_INF("esb_link_radio_setup  22222 %d", err_code);
+
+   radio_rx_start(esb_rx_data_cb);
     return 0;
 }
