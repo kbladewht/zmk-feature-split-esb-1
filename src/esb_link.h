@@ -8,11 +8,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
-/* One packet from a peripheral, handed up in thread context (not the radio ISR). */
-typedef void (*esb_link_rx_callback_t)(uint8_t pipe, const uint8_t *data, size_t length);
-
-/* Initialize the central radio in PRX mode. */
-int esb_link_init(esb_link_rx_callback_t callback);
+/* Initialize the central radio in PRX mode; received payloads are logged for diagnostics. */
+int esb_link_init(void);
 
 int esb_link_set_enabled(bool enabled);
 

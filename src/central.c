@@ -493,7 +493,7 @@ int zmk_split_esb_start(void) {
     radio_start_error = esb_link_hfclk_acquire();
     if (radio_start_error == 0) {
         hop_boot_mask();
-        radio_start_error = esb_link_init(central_ingest_packet);
+        radio_start_error = esb_link_init();
     }
     if (radio_start_error != 0) {
         esb_link_hfclk_release();
