@@ -122,8 +122,9 @@ static void on_esb_event(nrf_esb_evt_t const *event) {
     }
 }
 typedef void (*esb_handler_t)(nrf_esb_payload_t payload);
-void radio_rx_start(esb_handler_t handler)
+static void radio_rx_start(esb_handler_t handler)
 {
+    ARG_UNUSED(handler);
     // m_handler_n = handler;
     uint32_t err_code = nrf_esb_start_rx();
     APP_ERROR_CHECK(err_code);
