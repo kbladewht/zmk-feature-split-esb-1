@@ -50,8 +50,8 @@ DT side: shared dtsi every device includes, plus role-specific lines. Everything
 reports to the dongle (central). Radio identity and PHY/retry settings are
 hard-coded in `src/esb_link.c`; edit them there and keep them identical on the
 central and every peripheral. BASE0 is `E7 E7 E7 E7` for pipe 0; BASE1 is
-`C2 C2 C2 C2` for pipes 1-7. Configure matching prefixes per pipe (the p42
-split uses `E7` and `C2`). The other defaults are address length 5, TX power
+`C2 C2 C2 C2` for pipes 1-7. Prefixes are hard-coded by pipe: pipe 0 uses
+`E7`, pipe 1 uses `C2`. The other defaults are address length 5, TX power
 0 dBm, 3 retransmissions at 600 us, fast ramp-up off, CRC-16, and 2 Mbps.
 These repeated-byte addresses may sync poorly. Two examples, by peripheral
 count and what each sources.
@@ -68,7 +68,6 @@ Shared (`esb_shared.dtsi`), every device:
         peripherals {
             mouse: peripheral_mouse {
                 pipe = <0>;
-                prefix = <0xE7>;
                 weight = <1>;
             };
         };
@@ -117,12 +116,10 @@ Shared (`esb_shared.dtsi`):
         peripherals {
             left: peripheral_left {
                 pipe = <0>;
-                prefix = <0xE7>;
                 weight = <1>;
             };
             right: peripheral_right {
                 pipe = <1>;
-                prefix = <0xC2>;
                 weight = <1>;
             };
         };
@@ -149,7 +146,7 @@ no HID-indicator forwarding.
 
 | DT property | Value |
 |---|---|
-| `peripherals` | one child node per peripheral: `pipe`, `prefix` (1 byte), `weight`, `reply-queue-depth` (central reverse-channel backlog for this pipe, default 8) |
+| `peripherals` | one child node per peripheral: `pipe`, `weight`, `reply-queue-depth` (central reverse-channel backlog for this pipe, default 8) |
 | `hop-channels` | channel bytestring, each 0-100 (2400 + N MHz). 1 = fixed, 2+ = hopping set |
 | `hop-anchors` | unmaskable rendezvous set, a subset of hop-channels (default 76, 79, 82). Pick channels clear of local WiFi |
 | `hop-threshold` | graded loss before acting: central hop-vote sum, peripheral sweep streak; fully-lost window scores 4 (default 6) |

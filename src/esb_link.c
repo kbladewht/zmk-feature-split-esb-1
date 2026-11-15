@@ -33,17 +33,16 @@ BUILD_ASSERT(DT_HAS_COMPAT_STATUS_OKAY(zmk_split_esb),
 static const uint8_t base_address_0[] = {0xE7, 0xE7, 0xE7, 0xE7};
 static const uint8_t base_address_1[] = {0xC2, 0xC2, 0xC2, 0xC2};
 static const uint8_t address_length = 5;
-static const int8_t tx_power_dbm = 0;
 BUILD_ASSERT(sizeof(base_address_0) == 4, "base-address-0 must be exactly 4 bytes");
 BUILD_ASSERT(sizeof(base_address_1) == 4, "base-address-1 must be exactly 4 bytes");
 
 #define ESB_PERIPHERALS DT_INST_CHILD(0, peripherals)
-#define PERIPHERAL_PREFIX(node) [DT_PROP(node, pipe)] = DT_PROP(node, prefix),
-static const uint8_t peripheral_prefixes[] = {
-    DT_FOREACH_CHILD_STATUS_OKAY(ESB_PERIPHERALS, PERIPHERAL_PREFIX)
-};
-#define PERIPHERAL_COUNT ARRAY_SIZE(peripheral_prefixes)
+#define ADDR_PREFIX_ESB_QF {0xE7, 0xC2}
+static const uint8_t peripheral_prefixes[] = ADDR_PREFIX_ESB_QF;
+#define PERIPHERAL_COUNT DT_CHILD_NUM_STATUS_OKAY(ESB_PERIPHERALS)
 BUILD_ASSERT(PERIPHERAL_COUNT >= 1, "peripherals needs at least one entry");
+BUILD_ASSERT(PERIPHERAL_COUNT <= ARRAY_SIZE(peripheral_prefixes),
+             "hard-coded ESB prefixes support at most two peripherals");
 const uint8_t esb_link_pipe_count = (uint8_t)PERIPHERAL_COUNT;
 
 /* NCS's CONFIG_ESB_MAX_PAYLOAD_LENGTH default (32) wins over ours on Kconfig parse order.
@@ -207,7 +206,7 @@ static int esb_link_radio_setup(void) {
     if (set_error) {
         LOG_DBG("esb_set_rf_channel returned %d", set_error);
     }
-    set_error = esb_set_tx_power(tx_power_dbm);
+    set_error = esb_set_tx_power(0);
     if (set_error) {
         LOG_DBG("esb_set_tx_power returned %d", set_error);
     }

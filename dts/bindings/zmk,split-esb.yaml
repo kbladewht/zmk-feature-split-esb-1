@@ -100,10 +100,6 @@ child-binding:
         type: int
         required: true
         description: ESB pipe index, also the ZMK source id.
-      prefix:
-        type: int
-        required: true
-        description: 1-byte address prefix, distinct per pipe.
       weight:
         type: int
         default: 1
