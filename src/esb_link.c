@@ -155,6 +155,9 @@ static void on_esb_event(const struct esb_evt *event) {
         esb_link_role_rx_done(pipes_acked);
         break;
     }
+    case ESB_EVENT_TX_SUCCESS:
+        /* PRX ACK payload transmission needs no TX completion handling here. */
+        break;
     case ESB_EVENT_TX_FAILED: {
         /* Only a flush moves the TX FIFO past a failed head.
          * esb_pop_tx moves the write end instead. */
