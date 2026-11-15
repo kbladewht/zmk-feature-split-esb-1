@@ -24,7 +24,31 @@ LOG_MODULE_DECLARE(zmk_split_esb, CONFIG_ZMK_SPLIT_ESB_LOG_LEVEL);
 BUILD_ASSERT(DT_HAS_COMPAT_STATUS_OKAY(zmk_split_esb),
              "a zmk,split-esb node (base-address/peripherals/hop-channels) is required");
 
+#define ESB_PERIPHERALS DT_INST_CHILD(0, peripherals)
+
+#if defined(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
+static const uint8_t base_address_0[] = {0xE7, 0xE7, 0xE7, 0xE7};
+static const uint8_t base_address_1[] = {0xC2, 0xC2, 0xC2, 0xC2};
+static const uint8_t peripheral_prefixes[] = {0xE7, 0xC2, 0xC3};
+#define PERIPHERAL_PIPE(node) [DT_PROP(node, pipe)] = 1,
+static const uint8_t peripheral_pipes[] = {
+    DT_FOREACH_CHILD_STATUS_OKAY(ESB_PERIPHERALS, PERIPHERAL_PIPE)
+};
+#define PERIPHERAL_COUNT ARRAY_SIZE(peripheral_pipes)
+BUILD_ASSERT(sizeof(base_address_0) == 4, "ESB base address 0 must be exactly 4 bytes");
+BUILD_ASSERT(sizeof(base_address_1) == 4, "ESB base address 1 must be exactly 4 bytes");
+BUILD_ASSERT(PERIPHERAL_COUNT <= ARRAY_SIZE(peripheral_prefixes),
+             "hardcoded ESB prefixes support at most three pipes");
+#else
 static const uint8_t base_address[] = DT_INST_PROP(0, base_address);
+#define PERIPHERAL_PREFIX(node) [DT_PROP(node, pipe)] = DT_PROP(node, prefix),
+static const uint8_t peripheral_prefixes[] = {
+    DT_FOREACH_CHILD_STATUS_OKAY(ESB_PERIPHERALS, PERIPHERAL_PREFIX)
+};
+#define PERIPHERAL_COUNT ARRAY_SIZE(peripheral_prefixes)
+BUILD_ASSERT(sizeof(base_address) == 4, "base-address must be exactly 4 bytes");
+#endif
+
 static const uint8_t address_length = DT_INST_PROP(0, address_length);
 static const int8_t tx_power_dbm = DT_INST_PROP(0, tx_power_dbm);
 static const uint16_t retransmit_count = DT_INST_PROP(0, retransmit_count);
@@ -32,14 +56,7 @@ static const uint16_t retransmit_delay_us = DT_INST_PROP(0, retransmit_delay_us)
 static const bool use_fast_ramp_up = DT_INST_PROP(0, use_fast_ramp_up);
 static const uint8_t crc_bits = DT_INST_PROP(0, crc_bits);
 static const uint16_t bitrate_kbps = DT_INST_PROP(0, bitrate_kbps);
-BUILD_ASSERT(sizeof(base_address) == 4, "base-address must be exactly 4 bytes");
 
-#define ESB_PERIPHERALS DT_INST_CHILD(0, peripherals)
-#define PERIPHERAL_PREFIX(node) [DT_PROP(node, pipe)] = DT_PROP(node, prefix),
-static const uint8_t peripheral_prefixes[] = {
-    DT_FOREACH_CHILD_STATUS_OKAY(ESB_PERIPHERALS, PERIPHERAL_PREFIX)
-};
-#define PERIPHERAL_COUNT ARRAY_SIZE(peripheral_prefixes)
 BUILD_ASSERT(PERIPHERAL_COUNT >= 1, "peripherals needs at least one entry");
 BUILD_ASSERT(PERIPHERAL_COUNT <= CONFIG_ESB_PIPE_COUNT,
              "peripherals exceed CONFIG_ESB_PIPE_COUNT, ESB has at most 8 pipes");
@@ -194,11 +211,19 @@ static __noinline int esb_link_radio_setup(void) {
     if (set_error) {
         LOG_DBG("esb_set_address_length returned %d", set_error);
     }
+#if defined(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
+    set_error = esb_set_base_address_0(base_address_0);
+#else
     set_error = esb_set_base_address_0(base_address);
+#endif
     if (set_error) {
         LOG_DBG("esb_set_base_address_0 returned %d", set_error);
     }
+#if defined(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
+    set_error = esb_set_base_address_1(base_address_1);
+#else
     set_error = esb_set_base_address_1(base_address);
+#endif
     if (set_error) {
         LOG_DBG("esb_set_base_address_1 returned %d", set_error);
     }

@@ -3,9 +3,10 @@
 # SPDX-License-Identifier: MIT
 
 description: |
-  Shared ESB link identity for a ZMK ESB split.
-  The central and every peripheral must declare identical values to pair.
-  Place this node in a dtsi included by the central and every peripheral.
+  ESB link configuration for a ZMK split. Peripherals use the declared base address
+  and per-pipe prefixes. The central role in this branch uses hardcoded addresses and
+  prefixes (base addresses E7 E7 E7 E7 and C2 C2 C2 C2; pipe prefixes E7, C2, C3);
+  configure the peripheral firmware with matching values.
 
 compatible: zmk,split-esb
 
@@ -14,8 +15,8 @@ properties:
     type: uint8-array
     required: true
     description: |
-      4-byte ESB base address, shared across pipes. Vary bytes.
-      All-same-byte on-air address (base plus matching prefix) syncs poorly.
+      4-byte ESB base address used by peripheral builds. Ignored by the central build
+      in this branch, which uses hardcoded base addresses.
   address-length:
     type: int
     default: 5
@@ -186,7 +187,9 @@ child-binding:
       prefix:
         type: int
         required: true
-        description: 1-byte address prefix, distinct per pipe.
+        description: |
+          1-byte address prefix used by peripheral builds. The central build in this
+          branch uses hardcoded prefixes for pipes 0, 1, and 2.
       weight:
         type: int
         default: 1

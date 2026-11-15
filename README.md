@@ -206,14 +206,18 @@ pin. `nice_nano` defaults to TX=P0.06 and RX=P0.08. Here we put wire on P0.08:
 
 | DT property | Value |
 |---|---|
-| `base-address` | 4-byte bytestring `[..]`, shared across pipes, vary bytes (all-same-byte syncs poorly) |
+| `base-address` | 4-byte bytestring `[..]` used by peripherals; the central branch hardcodes its base addresses |
 | `address-length` | on-air address bytes 3/4/5, shorter trims airtime, weakens selectivity, all devices must match (default 5) |
-| `peripherals` | one child node per peripheral: `pipe`, `prefix` (1 byte), `weight`, `reply-queue-depth` (central command backlog for this pipe, default 8) |
+| `peripherals` | one child node per peripheral: `pipe`, `prefix` (1 byte, used by peripherals; central prefixes are hardcoded), `weight`, `reply-queue-depth` (central command backlog for this pipe, default 8) |
 | `hop-channels` | channel bytestring, each 0-100 (2400 + N MHz). 1 = fixed, 2+ = hopping set |
 | `hop-anchors` | channels never masked, a subset of hop-channels, build assert enforces. Omit and the engine spreads three across the pool. Pick channels clear of local WiFi |
 | `hop-threshold` | graded loss before acting: central hop-vote sum, peripheral sweep streak; fully-lost window scores 4 (default 24) |
 | `hop-min-active` | floor of unmasked channels the engine keeps hoppable (default 6) |
 | `hop-mask-threshold` | per-channel bad score at which the central masks it, clean windows decay (default 16) |
+
+This central branch hardcodes the two ESB base addresses `E7 E7 E7 E7` and
+`C2 C2 C2 C2`, and pipe prefixes `E7`, `C2`, `C3` for pipes 0, 1, and 2.
+Peripheral firmware must be configured with matching radio addresses.
 | `hop-restore-windows` | base windows a masked channel waits before retest, repeat offenders back off further (default 64) |
 | `hop-window-ms` | peripheral keepalive period while data flows (default 32) |
 | `rssi-floor-dbm` | central counts a served peripheral's motion weaker than this (dBm) as a degraded window (default -85) |
