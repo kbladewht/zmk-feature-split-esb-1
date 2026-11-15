@@ -29,8 +29,6 @@ BUILD_ASSERT(DT_HAS_COMPAT_STATUS_OKAY(zmk_split_esb),
 
 #define ESB_PERIPHERALS DT_INST_CHILD(0, peripherals)
 
-static const uint8_t base_address_0[] = {0xE7, 0xE7, 0xE7, 0xE7};
-static const uint8_t base_address_1[] = {0xC2, 0xC2, 0xC2, 0xC2};
 static const uint8_t peripheral_prefixes[] = {0xE7, 0xC2, 0xA7, 0xA2};
 #define PERIPHERAL_PIPE(node) [DT_PROP(node, pipe)] = 1,
 static const uint8_t peripheral_pipes[] = {
@@ -133,12 +131,14 @@ static void esb_rx_data_cb(nrf_esb_payload_t payload)
     LOG_DBG("esb_rx_data_cb pipe=%u length=%u", payload.pipe, payload.length);
 
 }
-
+    uint8_t base_addr_0[4] = { 0xE7, 0xE7, 0xE7, 0xE7 };
+    uint8_t base_addr_1[4] = {0xC2, 0xC2, 0xC2, 0xC2};
+    uint8_t addr_prefix[4] = { 0xE7, 0xC2,0xA7, 0xA2 }; 
 int esb_link_init(esb_link_rx_callback_t callback) {
     rx_callback = callback;
-    k_thread_create(&rx_thread, rx_thread_stack, K_THREAD_STACK_SIZEOF(rx_thread_stack),
-                    rx_thread_fn, NULL, NULL, NULL, RX_THREAD_PRIORITY, 0,
-                    K_NO_WAIT);
+    // k_thread_create(&rx_thread, rx_thread_stack, K_THREAD_STACK_SIZEOF(rx_thread_stack),
+    //                 rx_thread_fn, NULL, NULL, NULL, RX_THREAD_PRIORITY, 0,
+    //                 K_NO_WAIT);
 
     int error = esb_link_hfclk_acquire();
     if (error) {
@@ -152,7 +152,8 @@ int esb_link_init(esb_link_rx_callback_t callback) {
     nrf_esb_config.event_handler = on_esb_event;
     nrf_esb_config.bitrate = NRF_ESB_BITRATE_1MBPS;
     nrf_esb_config.crc = NRF_ESB_CRC_16BIT;
-    nrf_esb_config.tx_output_power = NRF_ESB_TX_POWER_0DBM;
+    nrf_esb_config.event_handler = nrf_esb_event_handler_n;
+    nrf_esb_config.tx_output_power = (nrf_esb_tx_power_t)tx_power_dbm;
     nrf_esb_config.payload_length = 0;
     nrf_esb_config.retransmit_delay = 250;
     nrf_esb_config.radio_irq_priority = CONFIG_ZMK_SPLIT_ESB_RADIO_IRQ_PRIORITY;
@@ -160,25 +161,35 @@ int esb_link_init(esb_link_rx_callback_t callback) {
     /* Reverse channel replies ride on ACKs requested by peripherals. */
     nrf_esb_config.selective_auto_ack = false;
 
-uint8_t base_addr_0[4] = { 0xE7, 0xE7, 0xE7, 0xE7 };
-    uint8_t base_addr_1[4] = { 0xC2, 0xC2, 0xC2, 0xC2 };
-    uint8_t addr_prefix[3] = { 0xE7, 0xC2, 0xC3 };
+    error = esb_link_nrf_status_to_errno(nrf_esb_init(&nrf_esb_config));
+    if (error) {
+        return error;
+    }
 
-    uint32_t err_code = nrf_esb_init(&nrf_esb_config);
+    error = esb_link_nrf_status_to_errno(nrf_esb_set_address_length(address_length));
+    if (error) {
+        return error;
+    }
+    error = esb_link_nrf_status_to_errno(nrf_esb_set_rf_channel(26));
+    if (error) {
+        return error;
+    }
+    error = esb_link_nrf_status_to_errno(nrf_esb_set_base_address_0(base_addr_0));
+    if (error) {
+        return error;
+    }
+    error = esb_link_nrf_status_to_errno(nrf_esb_set_base_address_1(base_addr_1));
+    if (error) {
+        return error;
+    }
+    error = esb_link_nrf_status_to_errno(nrf_esb_set_prefixes(addr_prefix, 4));
+    if (error) {
+        return error;
+    }
 
-
-      nrf_esb_set_rf_channel(26);
-     nrf_esb_set_base_address_0(base_addr_0);
-    nrf_esb_set_base_address_1(base_addr_1);
-
-    
-        nrf_esb_set_prefixes(addr_prefix, 4);
-  
-    LOG_INF("esb_link_radio_setup  22222 %d", err_code);
-
-   int start_error = radio_rx_start(esb_rx_data_cb);
-   if (start_error) {
-       return start_error;
-   }
+    int start_error = radio_rx_start(esb_rx_data_cb);
+    if (start_error) {
+        return start_error;
+    }
     return 0;
 }
