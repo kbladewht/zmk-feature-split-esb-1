@@ -3,10 +3,9 @@
 # SPDX-License-Identifier: MIT
 
 description: |
-  ESB link configuration for a ZMK split. Peripherals use the declared base address
-  and per-pipe prefixes. The central role in this branch uses hardcoded addresses and
-  prefixes (base addresses E7 E7 E7 E7 and C2 C2 C2 C2; pipe prefixes E7, C2, C3);
-  configure the peripheral firmware with matching values.
+  Central-side ESB configuration for a ZMK split. The central uses hardcoded addresses
+  and per-pipe prefixes (base addresses E7 E7 E7 E7 and C2 C2 C2 C2; pipe prefixes
+  E7, C2, C3). Compatible peripheral firmware must use matching values.
 
 compatible: zmk,split-esb
 
@@ -63,8 +62,8 @@ properties:
     description: |
       Graded loss before acting. A fully-lost window scores 4, so the default tolerates
       five bad windows and hops on the sixth, riding out brief interference instead of
-      fleeing it. Central: weighted link-loss sum across peripherals that triggers a
-      coordinated hop. Peripheral: sweep trigger for the failed-window streak.
+      fleeing it. The central uses a weighted link-loss sum across peripherals to trigger
+      a coordinated hop.
   hop-min-active:
     type: int
     default: 6
@@ -89,7 +88,7 @@ properties:
   hop-window-ms:
     type: int
     default: 32
-    description: Peripheral keepalive period while data is flowing.
+    description: Expected remote-peripheral keepalive period while data is flowing.
   rssi-floor-dbm:
     type: int
     default: -85
@@ -108,8 +107,8 @@ properties:
     type: int
     default: 128
     description: |
-      Peripheral keepalive period when no data is flowing. Also the central's hop-decision
-      window period.
+      Expected remote-peripheral keepalive period when no data is flowing. Also the
+      central's hop-decision window period.
   peripheral-timeout-ms:
     type: int
     default: 3000
@@ -125,9 +124,7 @@ properties:
     type: int
     default: 12
     description: |
-      Hardware retransmit ceiling before an unacked packet is dropped. The peripheral
-      adapts the live count between 2 and this from its attempts EWMA, so a clean link
-      keeps low tail latency and a degraded one spends the full budget.
+      Hardware retransmit ceiling before an unacked packet is dropped by the central.
   retransmit-delay-us:
     type: int
     default: 600
@@ -135,9 +132,8 @@ properties:
   use-fast-ramp-up:
     type: boolean
     description: |
-      Shorter radio TX/RX ramp-up delay.
-      nRF52/nRF53 only.
-      All peripherals must match the central.
+      Shorter radio TX/RX ramp-up delay. nRF52/nRF53 only. Compatible peripherals
+      must match the central.
   crc-bits:
     type: int
     default: 16
@@ -171,12 +167,12 @@ properties:
       - full-duplex
       - simplex
     description: |
-      Wire link wiring. full-duplex: TX and RX lines, both directions.
+      Central wire-peer wiring. full-duplex: TX and RX lines, both directions.
       simplex: one line, wire peer to its receiver only, no traffic back.
       Both halves must match.
 
 child-binding:
-  description: Peripheral table container.
+  description: Remote peripheral table container.
   child-binding:
     description: One ESB peripheral.
     properties:

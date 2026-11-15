@@ -178,10 +178,6 @@ int esb_link_role_start(void) {
     return esb_start_rx();
 }
 
-void esb_link_set_idle(bool idle) {
-    ARG_UNUSED(idle);
-}
-
 static int write_reply(const struct esb_payload *payload) {
     int error = esb_write_payload(payload);
     if (error != 0) {
@@ -331,14 +327,4 @@ void esb_link_role_rx_done(uint8_t pipes_acked) {
         }
         write_idle_reply(pipe);
     }
-}
-
-void esb_link_role_tx_succeeded(void) {
-}
-
-bool esb_link_role_retry_failed_tx(void) {
-    return false;
-}
-
-void esb_link_role_stop(void) {
 }

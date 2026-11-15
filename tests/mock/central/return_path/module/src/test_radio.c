@@ -61,13 +61,6 @@ bool hop_consume_rx(uint8_t pipe, const uint8_t *data, uint8_t length, int8_t rs
     return false;
 }
 
-void hop_note_tx_success(uint8_t attempts) {
-    ARG_UNUSED(attempts);
-}
-
-void hop_note_tx_failed(void) {
-}
-
 uint8_t hop_current_channel(void) {
     return 0;
 }

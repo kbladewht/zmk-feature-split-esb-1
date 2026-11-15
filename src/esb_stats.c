@@ -1,7 +1,7 @@
 // Copyright 2026 Roman Kuzmitskii (@damex)
 // SPDX-License-Identifier: MIT
 
-/* Link counters, logged and cleared once a second, lines by role. */
+/* Central link counters, logged and cleared once a second. */
 #define DT_DRV_COMPAT zmk_split_esb
 
 #include "esb_stats.h"
@@ -59,26 +59,6 @@ void esb_stat_note_rx(uint8_t pipe, bool data) {
     }
 }
 
-void esb_stat_tx_queued(void) {
-    atomic_val_t queued = atomic_inc(&tx_queued) + 1;
-    esb_stat_peak(ESB_STAT_TX_PEAK, (uint32_t)queued);
-}
-
-void esb_stat_tx_done(void) {
-    /* Central: TX success marks ACK payloads leaving, already counted on receive. */
-    if (IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)) {
-        return;
-    }
-    /* One completion event can cover two packets, an idle radio resyncs to empty. */
-    if (esb_is_idle()) {
-        atomic_set(&tx_queued, 0);
-        return;
-    }
-    if (atomic_dec(&tx_queued) <= 0) {
-        atomic_set(&tx_queued, 0);
-    }
-}
-
 void esb_stat_tx_cleared(void) {
     atomic_set(&tx_queued, 0);
     for (uint8_t pipe = 0; pipe < PIPE_COUNT; pipe++) {
@@ -92,11 +72,12 @@ void esb_stat_reply_written(uint8_t pipe) {
         return;
     }
     replies_queued[pipe]++;
-    esb_stat_tx_queued();
+    atomic_val_t queued = atomic_inc(&tx_queued) + 1;
+    esb_stat_peak(ESB_STAT_TX_PEAK, (uint32_t)queued);
 }
 
 void esb_stat_reply_asked(uint8_t pipe) {
-    if (!IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL) || pipe >= PIPE_COUNT) {
+    if (pipe >= PIPE_COUNT) {
         return;
     }
     if (reply_offered[pipe] && replies_queued[pipe] > 0) {
@@ -137,50 +118,13 @@ static void log_central(void) {
     LOG_DBG("stats: replies written %u refused %u", written, refused);
 }
 
-static void log_peripheral(void) {
-    uint32_t sent = take_count(ESB_STAT_SENT);
-    uint32_t refused = take_count(ESB_STAT_SEND_REFUSED);
-    uint32_t noack = take_count(ESB_STAT_NOACK_SENT);
-    uint32_t ok = take_count(ESB_STAT_TX_OK);
-    uint32_t retries = take_count(ESB_STAT_TX_RETRIES);
-    uint32_t failed = take_count(ESB_STAT_TX_FAILED);
-    uint32_t flushed = take_count(ESB_STAT_TX_FLUSHED);
-    LOG_DBG("stats: sent %u refused %u noack %u, tx ok %u retries %u failed %u flushed %u",
-            sent,
-            refused,
-            noack,
-            ok,
-            retries,
-            failed,
-            flushed);
-}
-
-static void log_relay(void) {
-    uint32_t polls = take_count(ESB_STAT_RELAY_POLLS);
-    uint32_t new_motion = take_count(ESB_STAT_RELAY_NEW_MOTION);
-    uint32_t usb_took = take_count(ESB_STAT_RELAY_USB_TOOK);
-    uint32_t usb_refused = take_count(ESB_STAT_RELAY_USB_REFUSED);
-    LOG_DBG("stats: relay polls %u, new motion %u, usb took %u refused %u",
-            polls,
-            new_motion,
-            usb_took,
-            usb_refused);
-}
-
 static void stats_work_fn(struct k_work *work);
 static K_WORK_DELAYABLE_DEFINE(stats_work, stats_work_fn);
 
 static void stats_work_fn(struct k_work *work) {
     ARG_UNUSED(work);
     log_queues();
-    if (IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)) {
-        log_central();
-    } else {
-        log_peripheral();
-    }
-    if (IS_ENABLED(CONFIG_ZMK_SPLIT_ESB_HID_RELAY) && !IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)) {
-        log_relay();
-    }
+    log_central();
     k_work_reschedule(&stats_work, K_MSEC(STATS_PERIOD_MS));
 }
 

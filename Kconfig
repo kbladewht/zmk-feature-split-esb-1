@@ -3,11 +3,11 @@
 
 menuconfig ZMK_SPLIT_ESB
     bool "ZMK ESB split transport"
-    depends on ZMK_SPLIT
+    depends on ZMK_SPLIT && ZMK_SPLIT_ROLE_CENTRAL
     select ESB
     help
-      Enhanced ShockBurst (2.4 GHz) split transport for one or more peripherals and a
-      single central. One ESB packet carries one complete split message.
+      Central-side Enhanced ShockBurst (2.4 GHz) split transport for one or more
+      peripherals. One ESB packet carries one complete split message.
       ESB hardware ACK, retransmit and CRC provide reliability.
 
 if ZMK_SPLIT_ESB
@@ -32,13 +32,6 @@ config ZMK_SPLIT_ESB_EVENT_QUEUE_SIZE
       Key, sensor and battery events queue here for the system workqueue,
       where ZMK behavior state lives. Input events bypass this queue.
 
-config ZMK_SPLIT_ESB_COMMAND_QUEUE_SIZE
-    int "Peripheral: inbound command queue depth"
-    default 8
-    help
-      Central commands (behavior invocations, HID indicators) queue here for
-      the system workqueue.
-
 config ZMK_SPLIT_ESB_PRIORITY
     int "Split transport registration priority"
     default 50
@@ -51,25 +44,15 @@ config ZMK_SPLIT_ESB_BATTERY_LOG
 
 config ZMK_SPLIT_ESB_HID_RELAY
     bool "Relay HID reports across the ESB link"
-    select USB if !ZMK_SPLIT_ROLE_CENTRAL
-    select USB_DEVICE_STACK if !ZMK_SPLIT_ROLE_CENTRAL
-    select USB_DEVICE_HID if !ZMK_SPLIT_ROLE_CENTRAL
-    select USB_DEVICE_INITIALIZE_AT_BOOT if !ZMK_SPLIT_ROLE_CENTRAL
     help
-      Central: snoop HID reports and send each one to every relay-role peripheral.
-      Peripheral (role = "relay"): register a USB HID device and forward each
-      received report onto it. Lets a dumb dongle expose the split as one USB
-      HID device to the host. Requires at least one peripheral with role = "relay"
-      in the zmk,split-esb DT node.
+      Central snoops HID reports and sends each one to relay-role peripherals.
 
 config ZMK_SPLIT_ESB_HID_RELAY_POLL_MS
     int "Relay peripheral poll period, ms"
     default 4
     depends on ZMK_SPLIT_ESB_HID_RELAY
     help
-      Relay-role peripheral pings central at this rate so any HID report queued
-      on its pipe comes back on the ACK payload. Lower is faster HID latency,
-      at the cost of more radio airtime and higher relay power draw.
+      Poll period used by relay peripherals. Keep this in sync with their firmware.
 
 config ZMK_SPLIT_ESB_HID_RELAY_KEEPALIVE_MS
     int "HID relay keepalive period, ms"
@@ -80,10 +63,6 @@ config ZMK_SPLIT_ESB_HID_RELAY_KEEPALIVE_MS
       is idle, so a rare dropped release report heals within one period.
       Match this to ZMK_SPLIT_ESB_HID_RELAY_POLL_MS so every relay poll has a fresh report.
 
-# ZMK sets 1 ms only under ZMK_USB, which a relay dongle leaves off.
-config USB_HID_POLL_INTERVAL_MS
-    default 1 if ZMK_SPLIT_ESB_HID_RELAY && !ZMK_SPLIT_ROLE_CENTRAL
-
 menuconfig ZMK_SPLIT_ESB_WIRE
     bool "Wire link between split peripherals"
     select SERIAL
@@ -91,31 +70,8 @@ menuconfig ZMK_SPLIT_ESB_WIRE
     select RING_BUFFER
     select CRC
     help
-      UART link between two split peripherals, full duplex or simplex per DT
-      wire-mode. Reuses the ESB wire packet format above raw framing. Base
-      transport for wire-central and wire-peripheral sub-roles.
-
-choice ZMK_SPLIT_ESB_PERIPHERAL_TRANSPORT
-    prompt "Peripheral transport"
-    depends on !ZMK_SPLIT_ROLE_CENTRAL
-    default ZMK_SPLIT_ESB_PERIPHERAL_TRANSPORT_ESB
-
-config ZMK_SPLIT_ESB_PERIPHERAL_TRANSPORT_ESB
-    bool "ESB radio"
-
-config ZMK_SPLIT_ESB_PERIPHERAL_TRANSPORT_WIRE
-    bool "Wire (UART / USB CDC)"
-    select ZMK_SPLIT_ESB_WIRE
-
-endchoice
-
-config ZMK_SPLIT_ESB_WIRE_RELAY
-    bool "Relay events from a wire peer"
-    depends on ZMK_SPLIT_ESB_PERIPHERAL_TRANSPORT_ESB
-    select ZMK_SPLIT_ESB_WIRE
-    help
-      Peripheral acts as wire central for another split peripheral.
-      Wire peer frames forward to the central on the peer's ESB pipe.
+      UART link between the central and a split peripheral. Reuses the ESB
+      wire packet format above raw framing, with full duplex or simplex mode.
 
 config ZMK_SPLIT_ESB_WIRE_PEER
     bool "Central has a wire peer"

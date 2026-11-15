@@ -98,16 +98,6 @@ static struct k_thread rx_thread;
 static esb_link_rx_callback_t rx_callback;
 static atomic_t link_ready;
 
-static atomic_t tx_last_event_ms;
-
-void esb_link_mark_tx_event(void) {
-    atomic_set(&tx_last_event_ms, (atomic_val_t)k_uptime_get_32());
-}
-
-uint32_t esb_link_tx_last_event_ms(void) {
-    return (uint32_t)atomic_get(&tx_last_event_ms);
-}
-
 /* Dedicated dispatch thread: drain the SPSC and hand each packet to the role layer.
  * Off the shared system workqueue so a high RX rate isn't gated by unrelated work. */
 static FUNC_NORETURN void rx_thread_fn(void *unused_a, void *unused_b, void *unused_c) {
@@ -165,18 +155,7 @@ static void on_esb_event(const struct esb_evt *event) {
         esb_link_role_rx_done(pipes_acked);
         break;
     }
-    case ESB_EVENT_TX_SUCCESS:
-        esb_link_mark_tx_event();
-        hop_note_tx_success((uint8_t)event->tx_attempts);
-        esb_link_role_tx_succeeded();
-        esb_stat_tx_done();
-        break;
     case ESB_EVENT_TX_FAILED: {
-        esb_link_mark_tx_event();
-        hop_note_tx_failed();
-        if (esb_link_role_retry_failed_tx()) {
-            break;
-        }
         /* Only a flush moves the TX FIFO past a failed head.
          * esb_pop_tx moves the write end instead. */
         LOG_WRN("TX retransmits exhausted, flushing TX FIFO");
@@ -244,7 +223,7 @@ int esb_link_init(esb_link_rx_callback_t callback) {
     config.crc = esb_crc_from_bits(crc_bits);
     config.retransmit_count = retransmit_count;
     config.retransmit_delay = retransmit_delay_us;
-    /* Reverse channel rides only the ACKs the peripheral requests. */
+    /* Reverse channel replies ride on ACKs requested by peripherals. */
     config.selective_auto_ack = true;
     config.tx_mode = ESB_TXMODE_AUTO;
     config.use_fast_ramp_up = use_fast_ramp_up;
@@ -271,7 +250,6 @@ int esb_link_set_enabled(bool enabled) {
     }
     if (!enabled) {
         hop_stop();
-        esb_link_role_stop();
         int stop_error = esb_stop_rx();
         if (stop_error) {
             LOG_DBG("esb_stop_rx returned %d", stop_error);

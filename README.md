@@ -1,6 +1,7 @@
 # zmk-feature-split-esb
 
-Enhanced ShockBurst (2.4 GHz) split transport for ZMK. One or more peripherals, one central.
+Central-side Enhanced ShockBurst (2.4 GHz) split transport for ZMK, communicating
+with one or more compatible peripherals.
 Packet-native: split messages map to ESB packets (a report's input events
 coalesce into one, each packed to a compact on-air form), carried over a
 lock-free SPSC RX path.
@@ -39,12 +40,11 @@ CONFIG_ZMK_SPLIT_WIRED=n
 CONFIG_ZMK_SPLIT_ESB=y
 CONFIG_ESB_MAX_PAYLOAD_LENGTH=48
 ```
-Central also sets `CONFIG_ZMK_SPLIT_ROLE_CENTRAL=y`. Peripheral leaves it unset.
+The module supports the central role only; peripheral endpoints require a separate
+compatible implementation. Set `CONFIG_ZMK_SPLIT_ROLE_CENTRAL=y` on the central.
 
 Set `CONFIG_ESB_MAX_PAYLOAD_LENGTH` equal to `ZMK_SPLIT_ESB_MAX_PAYLOAD` (48)
-on every device. sdk-nrf default is 32, build assert catches it.
-Raise `CONFIG_ESB_TX_FIFO_SIZE` to 16 on a peripheral with bursty senders
-(chattery encoder). sdk-nrf default 8 drops events at source under a burst.
+on the central and compatible peer firmware. sdk-nrf default is 32, build assert catches it.
 Set `CONFIG_ESB_TX_FIFO_SIZE` on a central to twice its peripheral count or more,
 build assert catches it. Each pipe holds up to two ACK replies. sdk-nrf's 8 covers
 four peripherals. On a central with `CONFIG_ZMK_SPLIT_ESB_HID_RELAY=y`, raise
@@ -52,9 +52,9 @@ four peripherals. On a central with `CONFIG_ZMK_SPLIT_ESB_HID_RELAY=y`, raise
 arriving then drops without an ACK. Size it with the link counters: `full` above 0
 means it overflowed.
 
-DT side: shared dtsi every device includes, plus role-specific lines. Everything
-reports to the dongle (central). Two examples, by peripheral count and what each
-sources.
+The central DTS lists each remote peripheral under `peripherals`. The examples
+below also show the peer-side configuration expected by a compatible firmware.
+Everything reports to the dongle (central).
 
 ### One peripheral: a mouse
 
@@ -150,60 +150,6 @@ Right half (peripheral): claim pipe 1.
 Keys deliver, but peripheral-count limit below applies: no global-behavior broadcast,
 no HID-indicator forwarding.
 
-### Wire relay: one half over UART
-
-One half runs ESB, other rides UART to it. ESB half relays wire frames onto own
-ESB pipe. Dongle sees a normal peripheral. Shared (`esb_shared.dtsi`) reuses
-two-halves shape above.
-
-Relay half (ESB + wire central):
-```dts
-#include "esb_shared.dtsi"
-/ {
-    chosen {
-        zmk,esb-self = &left;
-        zmk,esb-wire-peer = &right;
-        zmk,esb-wire = &uart0;
-    };
-};
-&uart0 { status = "okay"; current-speed = <460800>; };
-```
-`.conf`:
-```conf
-CONFIG_ZMK_SPLIT_ESB_WIRE_RELAY=y
-```
-
-Wire half (no radio):
-```dts
-#include "esb_shared.dtsi"
-/ {
-    chosen {
-        zmk,esb-self = &right;
-        zmk,esb-wire = &uart0;
-    };
-};
-&uart0 { status = "okay"; current-speed = <460800>; };
-```
-`.conf`:
-```conf
-CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_TRANSPORT_WIRE=y
-```
-
-Full duplex (two pins, TX + RX between halves): `wire-mode` default, stock
-pinctrl on both sides. Central commands (behaviors, HID indicators) reach wire
-half.
-
-Simplex (single data pin, TRRS with one signal line): `wire-mode = "simplex"`
-in the shared node. Wire peer only sends, its receiver only listens, nothing
-travels back. Wire side needs pinctrl override so its TX lands on the shared
-pin. `nice_nano` defaults to TX=P0.06 and RX=P0.08. Here we put wire on P0.08:
-```dts
-&uart0_default {
-    group1 { psels = <NRF_PSEL(UART_RX, 0, 6)>; bias-pull-up; };
-    group2 { psels = <NRF_PSEL(UART_TX, 0, 8)>; };
-};
-```
-
 | DT property | Value |
 |---|---|
 | `base-address` | 4-byte bytestring `[..]` used by peripherals; the central branch hardcodes its base addresses |
@@ -211,7 +157,7 @@ pin. `nice_nano` defaults to TX=P0.06 and RX=P0.08. Here we put wire on P0.08:
 | `peripherals` | one child node per peripheral: `pipe`, `prefix` (1 byte, used by peripherals; central prefixes are hardcoded), `weight`, `reply-queue-depth` (central command backlog for this pipe, default 8) |
 | `hop-channels` | channel bytestring, each 0-100 (2400 + N MHz). 1 = fixed, 2+ = hopping set |
 | `hop-anchors` | channels never masked, a subset of hop-channels, build assert enforces. Omit and the engine spreads three across the pool. Pick channels clear of local WiFi |
-| `hop-threshold` | graded loss before acting: central hop-vote sum, peripheral sweep streak; fully-lost window scores 4 (default 24) |
+| `hop-threshold` | graded loss before the central's weighted hop vote; fully-lost window scores 4 (default 24) |
 | `hop-min-active` | floor of unmasked channels the engine keeps hoppable (default 6) |
 | `hop-mask-threshold` | per-channel bad score at which the central masks it, clean windows decay (default 16) |
 
@@ -225,7 +171,7 @@ Peripheral firmware must be configured with matching radio addresses.
 | `idle-keepalive-ms` | peripheral idle keepalive period, ESB and wire, also central hop-decision window, twice it quiet starts rendezvous (default 128) |
 | `peripheral-timeout-ms` | silence before the central releases a peripheral's held state (default 3000) |
 | `tx-power-dbm` | boot TX power in dBm, raise for range (default 0) |
-| `retransmit-count` | retransmit ceiling before drop, peripheral adapts 2..ceiling from link quality (default 12) |
+| `retransmit-count` | central retransmit ceiling before drop; match peer firmware (default 12) |
 | `retransmit-delay-us` | delay between retransmits (default 600) |
 | `use-fast-ramp-up` | shorter radio ramp-up, nRF52/nRF53, all peripherals must match the central |
 | `crc-bits` | CRC width 0/8/16, all peripherals must match the central (default 16) |
@@ -271,7 +217,6 @@ Tunables (Kconfig, defaults shown):
 | `ZMK_SPLIT_ESB_MAX_PAYLOAD` | 48 | max on-air bytes (>= largest split msg) |
 | `ZMK_SPLIT_ESB_RX_QUEUE_SIZE` | 16 | RX SPSC ring depth (power of 2) |
 | `ZMK_SPLIT_ESB_EVENT_QUEUE_SIZE` | 16 | central queue for key/sensor/battery events bound for the system workqueue |
-| `ZMK_SPLIT_ESB_COMMAND_QUEUE_SIZE` | 8 | peripheral queue for inbound central commands |
 | `ZMK_SPLIT_ESB_PRIORITY` | 50 | transport registration priority |
 | `ZMK_SPLIT_ESB_HID_RELAY_POLL_MS` | 4 | relay dongle poll period, lower is faster HID, 1 suits a USB-powered dongle |
 | `ZMK_SPLIT_ESB_HID_RELAY_KEEPALIVE_MS` | 4 | central re-sends current HID state on idle polls at this rate, match the poll period |
@@ -320,8 +265,9 @@ Indicators need `CONFIG_ZMK_HID_INDICATORS` on the central.
 
 ## HID relay
 
-A `role = "relay"` peripheral is a USB dongle for the split. Set
-`CONFIG_ZMK_SPLIT_ESB_HID_RELAY=y` on it and on the central. Every HID report
+A `role = "relay"` peripheral is a USB dongle for the split and needs a separate
+compatible firmware implementation. Set `CONFIG_ZMK_SPLIT_ESB_HID_RELAY=y` on
+the central. Every HID report
 change rides the ACK of the dongle's next poll, so
 `ZMK_SPLIT_ESB_HID_RELAY_POLL_MS` sets the latency. A poll is one byte. The
 central answers it in its radio interrupt. The dongle's keepalive and hop
@@ -338,7 +284,7 @@ Unplugging the central's USB brings the relay back.
 
 Host lock indicators (caps, num, scroll, compose, kana) go back up to the central,
 so its widgets and the halves' beacon see them.
-Set `CONFIG_ZMK_HID_INDICATORS=y` on the dongle and the central for that.
+Set `CONFIG_ZMK_HID_INDICATORS=y` on the dongle firmware and the central for that.
 
 Pointer input (trackball, trackpad, mouse keys) relays too.
 Put the relay pointer processor last in every input listener on the central,
@@ -352,7 +298,7 @@ motion never waits behind queued key changes. A gap past 8192 counts resyncs
 the dongle's baseline, and so do mouse reports silent past twice
 `idle-keepalive-ms`, as after a central restart.
 Button changes queue like key changes, so a click shorter than one poll still reaches the host.
-Set `CONFIG_ZMK_POINTING=y` on the dongle and the central.
+Set `CONFIG_ZMK_POINTING=y` on the dongle firmware and the central.
 
 ```dts
 / {
@@ -412,13 +358,8 @@ stale backlog. Commands keep the queue, `reply-queue-depth` deep.
 
 ## Power
 
-Peripheral follows ZMK activity. Active holds HFXO: sends start instantly.
-Idle releases crystal between transmissions: each keepalive or event
-re-acquires it, holds through retransmit cycle, lets go. First send after idle
-gap waits out crystal startup. Sleep stops radio and releases crystal before
-SYSTEM_OFF.
-
-Central listens continuously (PRX), never gates crystal.
+The central listens continuously in PRX mode and does not gate HFXO while
+active. On ZMK sleep, the radio stops before system poweroff.
 
 ## Status API
 

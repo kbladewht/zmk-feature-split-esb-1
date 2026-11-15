@@ -2,11 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 /*
- * Channel-hopping engine layered on the ESB transport.
+ * Central channel-hopping engine.
  * Hop logic is a no-op when hop-channels lists a single channel.
- * Peripheral keepalive tick still runs, central reconciles against its state snapshot.
- * Central: owns the epoch, votes to hop off a degrading channel.
- * Peripheral: adopts the epoch from beacons, on loss sweeps until the central answers.
  */
 #pragma once
 
@@ -14,38 +11,13 @@
 #include <stddef.h>
 #include <stdint.h>
 
-/* Schedule per-role hop work.
- * Safe before esb_link_init runs, work is statically initialized.
- * Central: hop-decision window.
- * Peripheral: keepalive tick, and the poll on a relay dongle. */
+/* Schedule the hop-decision window. Safe before esb_link_init runs. */
 void hop_start(void);
 
 void hop_stop(void);
 
-/* Called per received payload in the radio ISR.
- * rssi is the ESB sample magnitude (dBm is its negative).
- * Returns true for control packets the caller must not queue.
- * Central: relay poll only, keepalives queue for position reconcile.
- * Peripheral: beacon and mask update, except a beacon on a wire relay's peer pipe. */
+/* Called per received payload in the radio ISR. Returns true for control packets. */
 bool hop_consume_rx(uint8_t pipe, const uint8_t *data, uint8_t length, int8_t rssi);
-
-/* Central: no-op.
- * Peripheral: transmit succeeded after this many attempts (1 = first try).
- * Fire-and-forget success reports one attempt. */
-void hop_note_tx_success(uint8_t attempts);
-
-/* Central: no-op.
- * Peripheral: transmit exhausted its retransmits this window. */
-void hop_note_tx_failed(void);
-
-/* Central: no-op.
- * Peripheral: real data went out, next keepalive uses the fast rate. */
-void hop_note_data_sent(void);
-
-/* Central: no-op.
- * Peripheral: a packet left without ACK.
- * Its success proves no ACK and stays out of the window grade. */
-void hop_note_noack_sent(void);
 
 /* Channel the radio should currently tune to. */
 uint8_t hop_current_channel(void);
@@ -55,7 +27,6 @@ uint8_t hop_current_channel(void);
  * Next call retries it. */
 void apply_hop_channel(void);
 
-#if defined(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
 int hop_stage_beacon(uint8_t pipe, uint8_t hid_modifiers, uint8_t hid_indicators);
 
 bool hop_pipe_needs_rendezvous(uint8_t pipe);
@@ -69,16 +40,3 @@ void hop_pipe_note_seen(uint8_t pipe);
 /* Boot mask from persisted spectrum and an energy sweep.
  * Radio must be idle: run before esb_link_init, HFCLK running. */
 void hop_boot_mask(void);
-#else
-/* Resume last-acked channel state from retained RAM.
- * Run before esb_link_init, so the radio tunes to it. */
-void hop_restore(void);
-
-uint8_t hop_link_cost_x10(void);
-
-/* False while searching. */
-bool hop_link_acked(void);
-
-/* Returns -EINVAL above the DT retransmit-count. */
-int hop_set_retransmit_ceiling(uint32_t ceiling);
-#endif

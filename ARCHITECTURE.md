@@ -1,15 +1,15 @@
 # Architecture
 
-Paths a packet takes between peripherals and the dongle. Names match the source.
-Brackets are code, right edge names the file. Dashed rules split execution
-contexts: radio ISR only moves bytes, rx_thread dispatches, system workqueue is
-the only place that touches ZMK behavior state.
+Central-side paths for packets from remote peripherals. Peripheral-side firmware
+is not included in this module. Dashed rules split execution contexts: the radio
+ISR only moves bytes, rx_thread dispatches, and the system workqueue is the only
+place that touches ZMK behavior state.
 
 ## Boot
 
-Both chains run in the main thread through SYS_INIT, before any tick fires.
-ZMK transport `set_enabled` can fire earlier, so hop work items sit statically
-initialized.
+Central initialization runs in the main thread through SYS_INIT, before any tick
+fires. ZMK transport `set_enabled` can fire earlier, so hop work items sit
+statically initialized.
 
 ```
 +-- central boot --------------------------------------------------------------+
@@ -52,33 +52,6 @@ initialized.
 |      v                                                                       |
 |  [hop_start] --> [decision_work due in idle-keepalive-ms]                    |
 +------------------------------------------------------------------------------+
-
-+-- peripheral boot -----------------------------------------------------------+
-|                                                                              |
-|  [peripheral_init]                           peripheral.c                    |
-|      |                                                                       |
-|      v                                                                       |
-|  [hop_restore]                               hop_peripheral.c                |
-|  retained RAM magic + checksum checked,                                      |
-|  active_mask / adopted_epoch / hop_index resumed                             |
-|      |                                                                       |
-|      v                                                                       |
-|  [esb_link_init]                             esb_link.c                      |
-|      |                                                                       |
-|      |--> [rx_thread created]                                                |
-|      |--> [esb_link_hfclk_acquire]                                           |
-|      |--> [esb_init]                         NCS esb.c                       |
-|      |--> [esb_link_radio_setup]                                             |
-|      |    rf_channel tunes to the resumed hop_current_channel                |
-|      |--> [esb_link_role_start] no-op on PTX                                 |
-|      v                                                                       |
-|  [hop_start] --> [keepalive_work due in hop-window-ms]                       |
-|                   relay dongle: relay_poll_work due in its poll period       |
-|      |                                                                       |
-|      v                                                                       |
-|  [first keepalive tick]                                                      |
-|  polls the central on the resumed channel                                    |
-+------------------------------------------------------------------------------+
 ```
 
 ## Uplink: peripheral event to central
@@ -91,7 +64,7 @@ initialized.
 |   [ZMK event]                                                                |
 |       |                                                                      |
 |       v                                                                      |
-|   [peripheral_report_event]                       peripheral.c               |
+|   [peer event report]                       external firmware                |
 |       |                                                                      |
 |       |--key----> [pressed bitmap]    state taps, the keepalive              |
 |       |--button-> [held input keys]   carries and heals them                 |
@@ -99,14 +72,14 @@ initialized.
 |       |                                                                      |
 |       |input only                                                            |
 |       v                                                                      |
-|   [esb_batch]                                     esb_batch.c                |
+|   [peer packet batch]                      external firmware                |
 |   coalesce to sync flag, key event or full batch                             |
 |       |                                                                      |
 |       v         key/sensor/battery skip the batch                            |
 |   [esb_wire_encode_event]                         esb_wire.c                 |
 |       |                                                                      |
 |       v                                                                      |
-|   [esb_link_send]                       esb_link_peripheral.c                |
+|   [peer ESB sender]                      external firmware                   |
 |   noack for lossy-codes input, as running totals,                            |
 |   keepalives and relay polls enter here from their ticks                     |
 |       |                                                                      |
@@ -195,7 +168,7 @@ initialized.
 +-- peripheral -------|--------------------------------------------------------+
 | RADIO ISR           v                                                        |
 |                                                                              |
-|   [ACK payload] --> [hop_consume_rx]              hop_peripheral.c           |
+|   [ACK payload] --> [peer command handler]        external firmware          |
 |       |               |beacon         |mask update                           |
 |       |               v               v                                      |
 |       |           [epoch, hid,    [staged mask]                              |
@@ -207,7 +180,7 @@ initialized.
 | - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -|
 | rx_thread                                                                    |
 |                                                                              |
-|   [SPSC ring] --> [esb_peripheral_on_rx] --> [command msgq]                  |
+|   [peer dispatch] --> [command handler]           external firmware          |
 |                   wire peer's pipe on a relay half: Wire downlink            |
 |                   relay dongle: esb_hid_relay_deliver splits, drops repeats, |
 |                   turns pointer totals into deltas once USB takes them,      |
@@ -231,13 +204,13 @@ initialized.
 |   [ZMK event]                                                                |
 |       |                                                                      |
 |       v                                                                      |
-|   [peripheral_report_event]                       peripheral.c               |
+|   [peer event report]                       external firmware                |
 |       |                                                                      |
 |       v                                                                      |
 |   [esb_wire_encode_event]                         esb_wire.c                 |
 |       |                                                                      |
 |       v                                                                      |
-|   [wire_peripheral_report_event]                  wire_peripheral.c          |
+|   [wire sender]                              external firmware                |
 |       |                                                                      |
 |       v                                                                      |
 |   [wire_frame_encode]                             wire_frame.c               |
@@ -263,7 +236,7 @@ initialized.
 |   TX IRQ disables when all rings empty                                       |
 +---------------|--------------------------------------------------------------+
                 | UART bytes
-+-- relay half -|--------------------------------------------------------------+
++-- central -----|--------------------------------------------------------------+
 | UART ISR      v                                                              |
 |                                                                              |
 |   [uart_fifo_read] --> [wire_rx_ring]                                        |
@@ -275,102 +248,41 @@ initialized.
 |                      COBS decode, CRC check                                  |
 |       |                                                                      |
 |       v                                                                      |
-|   [wire_on_frame] --> [wire_relay_on_frame]       wire_relay.c               |
+|   [wire_on_frame] --> [wire_central_on_frame]     wire_central.c             |
 |       |                                                                      |
 |       v                                                                      |
-|   [esb_link_send_relay] --> [ESB TX FIFO]                                    |
-|   places frame on wire peer's ESB pipe for uplink to central                 |
+|   [central_ingest_packet]                         central.c                  |
 +------------------------------------------------------------------------------+
 ```
 
-## Wire downlink: central command and HID state to wire peer
+## Wire downlink: central command to wire peer
 
 ```
-+-- relay half ----------------------------------------------------------------+
-| RADIO ISR                                                                    |
++-- central -------------------------------------------------------------------+
+| system workqueue                                                             |
 |                                                                              |
-|   [ACK payload on wire peer's pipe] --> [hop_consume_rx]                     |
-|   mask update stops here, beacon applies locally and goes on with command    |
-|       |                                                                      |
-|       v                                                                      |
-|   [SPSC ring]                                                                |
-| - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -|
-| rx_thread                                                                    |
-|                                                                              |
-|   [SPSC ring] --> [esb_peripheral_on_rx]          esb_peripheral.c           |
-|       |                                                                      |
-|       v                                                                      |
-|   [wire_relay_forward_to_peer]                    wire_relay.c               |
+|   [central_send_command] --> [wire_central_send]    wire_central.c           |
 |       |                                                                      |
 |       v                                                                      |
 |   [wire_link_send_event]                          wire_link.c                |
-|   COBS wrap, CRC8-CCITT postfix, into wire_tx_event_ring                     |
+|   COBS frame in wire_tx_event_ring                                           |
 | - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -|
 | UART ISR                                                                     |
 |                                                                              |
 |   [wire_tx_event_ring] --> [uart_fifo_fill]                                  |
 +---------------|--------------------------------------------------------------+
-                | UART bytes, full-duplex wiring only, simplex never transmits
-+-- wire peer --|--------------------------------------------------------------+
-| UART ISR      v                                                              |
-|                                                                              |
-|   [uart_fifo_read] --> [wire_rx_ring]                                        |
-| - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -|
-| wire_link_rx thread                                                          |
-|                                                                              |
-|   [wire_rx_ring] --> [wire_frame_parser_ingest]   wire_link.c                |
-|                      COBS decode, CRC check                                  |
-|       |                                                                      |
-|       v                                                                      |
-|   [wire_on_frame] --> [wire_peripheral_on_frame]  wire_peripheral.c          |
-|       |                                                                      |
-|       |--beacon--> [peripheral_hid_state_store]   peripheral.c               |
-|       |    wrong length: refused, config_mismatch set, one warning           |
-|       |                                                                      |
-|       |command                                                               |
-|       v                                                                      |
-|   [peripheral_deliver_command] --> [command msgq] peripheral.c               |
-| - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -|
-| system workqueue                                                             |
-|                                                                              |
-|   [command msgq] --> [behavior invocation]                                   |
+                | UART bytes
++-- external wire peer --------------------------------------------------------+
+| Receives and handles the framed command.                                     |
 +------------------------------------------------------------------------------+
 ```
 
 ## Ticks
 
-All four run on the system workqueue.
+The central decision and staleness ticks run on the system workqueue. Peer-side
+keepalive and relay polls belong to external firmware.
 
 ```
-+-- relay poll tick ------------- ZMK_SPLIT_ESB_HID_RELAY_POLL_MS -------------+
-|                                                                              |
-|  [relay_poll_work_fn] --> [send relay poll]  hop_peripheral.c                |
-|  one byte, its ACK carries the central's HID reports                         |
-+------------------------------------------------------------------------------+
-
-+-- peripheral keepalive tick ---- hop-window-ms active, ----------------------+
-|                                  idle-keepalive-ms idle                      |
-|                                                                              |
-|  [link_acked, window attempts]               hop_peripheral.c                |
-|                |                                                             |
-|                v                                                             |
-|  [keepalive_work_fn]                                                         |
-|   |beacon epoch changed    |acked               |silent                      |
-|   v                        v                    v                            |
-|  [adopt_epoch]        [connected_window]   [lost_window]                     |
-|  retune to epoch      attempts EWMA ->     degrade undo ->                   |
-|  channel, mask swap   retransmit budget,   sweep the pool                    |
-|                       acked mean attempts ->                                 |
-|                       degrade step                                           |
-|   |                        |                    |                            |
-|   +------------+-----------+--------------------+                            |
-|                v                                                             |
-|  [send keepalive] --> [retained RAM]                                         |
-|  state, key bitmap,     last-acked channel,                                  |
-|  held input keys,       epoch, mask                                          |
-|  battery, cost, totals                                                       |
-+------------------------------------------------------------------------------+
-
 +-- central decision tick -------- idle-keepalive-ms window -------------------+
 |                                                                              |
 |  [heard / motion / active masks]              hop_central.c                  |
@@ -404,7 +316,7 @@ Time flows down, one column per device.
 ```
 +-- lost link -----------------------------------------------------------------+
 |                                                                              |
-|  peripheral                          central                                 |
+|  remote peer                         central                                 |
 |                                                                              |
 |  [TX failed, no ACK]                 [pipe quiet grows]                      |
 |  link_acked drops                    hop_pipe_quiet_ms past                  |
@@ -439,18 +351,8 @@ Time flows down, one column per device.
 
 ## Power
 
-```
-+-- peripheral power ----------------------------------------------------------+
-|                                                                              |
-|  [ZMK activity] --> [esb_sleep listener]          esb_sleep.c                |
-|   |active            |idle              |sleep                               |
-|   v                  v                  v                                    |
-|  [hold HFXO]     [release HFXO]     [radio stopped]                          |
-|  sends start     after a hold       before SYSTEM_OFF                        |
-|  instantly       window, next                                                |
-|                  send re-locks                                               |
-+------------------------------------------------------------------------------+
-```
+The central listens continuously in PRX mode and does not gate HFXO while
+active. On ZMK sleep, `esb_sleep.c` stops the radio before system poweroff.
 
 ## Packets
 
@@ -508,7 +410,6 @@ the `CONFIG_ZMK_SPLIT_ESB` prefix.
 |---|---|---|
 | RX SPSC ring | `..._RX_QUEUE_SIZE` | ISR drops the packet |
 | event msgq, central | `..._EVENT_QUEUE_SIZE` | dropped, keepalive heals keys |
-| command msgq, peripheral | `..._COMMAND_QUEUE_SIZE` | command dropped |
 | reply queue, per pipe | `reply-queue-depth` | stage returns -ENOBUFS |
 | control latch, per pipe | one slot per kind | newest overwrites, by design |
 | ESB RX FIFO | `CONFIG_ESB_RX_FIFO_SIZE`, raise on a relay central | radio drops the packet, no ACK |

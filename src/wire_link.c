@@ -148,17 +148,11 @@ static void wire_uart_isr(const struct device *uart_device, void *user_data) {
 }
 
 bool wire_link_can_transmit(void) {
-    if (!WIRE_LINK_SIMPLEX) {
-        return true;
-    }
-    return IS_ENABLED(CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_TRANSPORT_WIRE);
+    return !WIRE_LINK_SIMPLEX;
 }
 
 bool wire_link_can_receive(void) {
-    if (!WIRE_LINK_SIMPLEX) {
-        return true;
-    }
-    return !IS_ENABLED(CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_TRANSPORT_WIRE);
+    return true;
 }
 
 int wire_link_register_rx(struct wire_link_subscription *subscription) {

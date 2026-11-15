@@ -40,80 +40,6 @@ ZTEST(hop_policy, test_window_period_fires_never_double_at_wrap) {
     }
 }
 
-ZTEST(hop_policy, test_should_hop_threshold) {
-    uint8_t bad_windows = 0;
-    const uint16_t threshold = 3;
-    zassert_false(hop_policy_should_hop(&bad_windows, 1, threshold), "1 of 3");
-    zassert_false(hop_policy_should_hop(&bad_windows, 1, threshold), "2 of 3");
-    zassert_true(hop_policy_should_hop(&bad_windows, 1, threshold), "3rd consecutive hops");
-    zassert_equal(bad_windows, 0, "streak clears after hop");
-}
-
-ZTEST(hop_policy, test_should_hop_good_window_resets) {
-    uint8_t bad_windows = 0;
-    const uint16_t threshold = 3;
-    hop_policy_should_hop(&bad_windows, 1, threshold);
-    hop_policy_should_hop(&bad_windows, 1, threshold);
-    zassert_false(hop_policy_should_hop(&bad_windows, 0, threshold), "good window, no hop");
-    zassert_equal(bad_windows, 0, "good window clears the streak");
-    zassert_false(hop_policy_should_hop(&bad_windows, 1, threshold), "streak restarts from 0");
-}
-
-ZTEST(hop_policy, test_should_hop_threshold_one) {
-    uint8_t bad_windows = 0;
-    zassert_true(hop_policy_should_hop(&bad_windows, 1, 1), "threshold 1 hops on first fail");
-}
-
-ZTEST(hop_policy, test_should_hop_graded) {
-    uint8_t bad_windows = 0;
-    /* a big penalty reaches the threshold in one window */
-    zassert_true(hop_policy_should_hop(&bad_windows, 4, 3), "penalty over threshold hops at once");
-    zassert_equal(bad_windows, 0, "clears after hop");
-}
-
-ZTEST(hop_policy, test_attempts_penalty) {
-    const uint8_t good = 2;
-    zassert_equal(hop_policy_attempts_penalty(1, good), 0, "first try: no penalty");
-    zassert_equal(hop_policy_attempts_penalty(2, good), 0, "at good limit: no penalty");
-    zassert_equal(hop_policy_attempts_penalty(3, good), 1, "just over: 1");
-    zassert_equal(hop_policy_attempts_penalty(6, good), 2, "4 over: 2");
-    zassert_equal(hop_policy_attempts_penalty(14, good), HOP_POLICY_MAX_LOSS_PENALTY, "many: capped");
-    zassert_equal(hop_policy_attempts_penalty(255, good), HOP_POLICY_MAX_LOSS_PENALTY, "lost: capped");
-}
-
-ZTEST(hop_policy, test_window_attempts) {
-    zassert_equal(hop_policy_window_attempts(0, 0), 0, "no packets: 0");
-    zassert_equal(hop_policy_window_attempts(3, 1), 3, "one packet: its attempts");
-    zassert_equal(hop_policy_window_attempts(8, 4), 2, "exact mean");
-    zassert_equal(hop_policy_window_attempts(6, 4), 2, "one retried of four rounds up to 2");
-    zassert_equal(hop_policy_window_attempts(9, 4), 3, "just over 2 rounds up to 3");
-    zassert_equal(hop_policy_window_attempts(UINT32_MAX, 1), UINT8_MAX, "saturates");
-    zassert_equal(hop_policy_window_attempts(UINT32_MAX, UINT32_MAX), 1, "no overflow at type max");
-}
-
-ZTEST(hop_policy, test_acked_window_attempts) {
-    zassert_equal(hop_policy_acked_window_attempts(11, 9, 8), 3, "sends without ACK drop out");
-    zassert_equal(hop_policy_acked_window_attempts(6, 4, 0), 2, "all acked: plain mean");
-    zassert_equal(hop_policy_acked_window_attempts(4, 4, 4), 0, "nothing acked: no grade");
-    zassert_equal(hop_policy_acked_window_attempts(3, 2, 5),
-                  0,
-                  "more without ACK than successes: no grade");
-    zassert_equal(hop_policy_acked_window_attempts(0, 0, 0), 0, "no packets: 0");
-    zassert_equal(hop_policy_acked_window_attempts(UINT32_MAX, UINT32_MAX, 0),
-                  1,
-                  "no overflow at type max");
-    zassert_equal(hop_policy_acked_window_attempts(UINT32_MAX, UINT32_MAX, UINT32_MAX),
-                  0,
-                  "all without ACK: no grade");
-}
-
-ZTEST(hop_policy, test_index_next_wraps) {
-    zassert_equal(hop_policy_index_next(0, 3), 1, NULL);
-    zassert_equal(hop_policy_index_next(1, 3), 2, NULL);
-    zassert_equal(hop_policy_index_next(2, 3), 0, "wraps at count");
-    zassert_equal(hop_policy_index_next(0, 1), 0, "single channel stays put");
-}
-
 ZTEST(hop_policy, test_score_update_accrues_and_saturates) {
     uint8_t score = 0;
     hop_policy_score_update(&score, 3, 1);
@@ -384,51 +310,6 @@ ZTEST(hop_policy, test_should_beacon) {
     zassert_false(hop_policy_should_beacon(1, &beaconed, &repeats, 4), "stays quiet");
 
     zassert_true(hop_policy_should_beacon(2, &beaconed, &repeats, 4), "new change re-arms");
-}
-
-ZTEST(hop_policy, test_ewma_update) {
-    zassert_equal(hop_policy_ewma_update(10, 1), 10, "clean sample holds steady");
-    zassert_equal(hop_policy_ewma_update(10, 5), 20, "bad sample pulls up by a quarter");
-    zassert_equal(hop_policy_ewma_update(40, 1), 33, "clean sample decays");
-
-    uint16_t ewma = 10;
-    for (uint8_t window = 0; window < 32; window++) {
-        ewma = hop_policy_ewma_update(ewma, 8);
-    }
-    zassert_equal(ewma, 80, "converges to the sample");
-}
-
-ZTEST(hop_policy, test_ewma_recovers_to_clean) {
-    uint16_t ewma = 40;
-    for (uint8_t window = 0; window < 32; window++) {
-        ewma = hop_policy_ewma_update(ewma, 1);
-    }
-    zassert_equal(ewma, 10, "clean link returns to first-try cost");
-}
-
-ZTEST(hop_policy, test_adaptive_retransmits) {
-    zassert_equal(hop_policy_adaptive_retransmits(10, 2, 12), 2, "clean link floors");
-    zassert_equal(hop_policy_adaptive_retransmits(HOP_POLICY_RETRY_EWMA_LOW_X10, 2, 12), 2,
-                  "low breakpoint floors");
-    zassert_equal(hop_policy_adaptive_retransmits(HOP_POLICY_RETRY_EWMA_HIGH_X10, 2, 12), 12,
-                  "high breakpoint saturates");
-    zassert_equal(hop_policy_adaptive_retransmits(60, 2, 12), 12, "worse than high saturates");
-    zassert_equal(hop_policy_adaptive_retransmits(30, 2, 12), 7, "midpoint interpolates");
-    zassert_equal(hop_policy_adaptive_retransmits(30, 3, 3), 3, "degenerate range is total");
-}
-
-ZTEST(hop_policy, test_hfclk_release_waits_for_idle_radio) {
-    zassert_true(hop_policy_hfclk_release_allowed(true, true), "gated idle radio releases");
-    zassert_false(hop_policy_hfclk_release_allowed(true, false), "busy radio keeps the crystal");
-    zassert_false(hop_policy_hfclk_release_allowed(false, true), "ungated never releases");
-}
-
-ZTEST(hop_policy, test_retry_cycle_ms) {
-    zassert_equal(hop_policy_retry_cycle_ms(12, 600, 4, 100), 100, "short cycles hold the floor");
-    zassert_equal(hop_policy_retry_cycle_ms(12, 600, 20, 100), 144, "long cycles exceed the floor");
-    zassert_equal(hop_policy_retry_cycle_ms(0, 600, 4, 10), 10, "no retransmits holds the floor");
-    zassert_equal(hop_policy_retry_cycle_ms(UINT8_MAX, UINT16_MAX, UINT8_MAX, 0), 4261413,
-                  "widest inputs do not wrap");
 }
 
 ZTEST(hop_policy, test_index_next_active) {

@@ -22,41 +22,6 @@ uint8_t hop_policy_loss_penalty(int8_t rssi_dbm, int8_t floor_dbm);
 
 uint8_t hop_policy_saturating_add(uint8_t value, uint8_t add);
 
-/* Accumulate a graded sweep penalty, returning true and clearing the streak once it
- * reaches threshold. A zero penalty (clean window) resets the streak. */
-bool hop_policy_should_hop(uint8_t *bad_windows, uint8_t penalty, uint16_t threshold);
-
-/* Graded sweep penalty from a transmit's retransmit count: zero up to good_attempts, then
- * one point per HOP_POLICY_TX_ATTEMPTS_GRADE_STEP over it, capped at HOP_POLICY_MAX_LOSS_PENALTY. */
-#define HOP_POLICY_GOOD_TX_ATTEMPTS 2
-#define HOP_POLICY_TX_ATTEMPTS_GRADE_STEP 4
-uint8_t hop_policy_attempts_penalty(uint8_t attempts, uint8_t good_attempts);
-
-/* Window grade from its transmits: mean attempts rounded up, 0 without any. */
-uint8_t hop_policy_window_attempts(uint32_t attempts_sum, uint32_t packets);
-
-/* Window grade from its acked transmits, each send without ACK counted as one attempt.
- * 0 when no acked transmit is left. */
-uint8_t hop_policy_acked_window_attempts(uint32_t attempts_sum,
-                                         uint32_t packets,
-                                         uint32_t noack_packets);
-
-#define HOP_POLICY_ATTEMPTS_EWMA_SHIFT 2
-uint16_t hop_policy_ewma_update(uint16_t ewma_x10, uint8_t sample);
-
-/* Retransmit budget from the attempts EWMA: count_min at or below the low
- * breakpoint, count_max at or above the high one, linear between. */
-#define HOP_POLICY_RETRY_EWMA_LOW_X10 15
-#define HOP_POLICY_RETRY_EWMA_HIGH_X10 45
-uint8_t hop_policy_adaptive_retransmits(uint16_t ewma_x10, uint8_t count_min, uint8_t count_max);
-
-bool hop_policy_hfclk_release_allowed(bool gating, bool radio_idle);
-
-uint32_t hop_policy_retry_cycle_ms(uint8_t count, uint16_t delay_us, uint8_t margin,
-                                   uint32_t floor_ms);
-
-uint8_t hop_policy_index_next(uint8_t index, size_t count);
-
 uint8_t hop_policy_index_next_active(uint8_t index, const uint8_t *mask, size_t count);
 
 /* Both ends derive the same channel index from the central's epoch. */

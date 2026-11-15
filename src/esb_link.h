@@ -1,82 +1,35 @@
 // Copyright 2026 Roman Kuzmitskii (@damex)
 // SPDX-License-Identifier: MIT
 
-/* ESB radio link, both roles. */
+/* ESB radio link for the central role. */
 #pragma once
 
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
-/* One received packet, handed up in thread context (not the radio ISR).
- * Central: event from the peripheral on pipe.
- * Peripheral: command rode back on an ACK, pipe is its own. */
+/* One packet from a peripheral, handed up in thread context (not the radio ISR). */
 typedef void (*esb_link_rx_callback_t)(uint8_t pipe, const uint8_t *data, size_t length);
 
-/* Initialize radio for this device's role.
- * Central: PRX, starts listening.
- * Peripheral: PTX, idle until first send. */
+/* Initialize the central radio in PRX mode. */
 int esb_link_init(esb_link_rx_callback_t callback);
 
-/* Central: re-enable restarts RX.
- * Peripheral: re-enable restarts hop work only. */
 int esb_link_set_enabled(bool enabled);
 
-/* Central: no-op.
- * Peripheral: idle gates HFXO. */
-void esb_link_set_idle(bool idle);
-
-#if !defined(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
-/* Peripheral only.
- * Send one packet. ack == false is fire-and-forget: no ACK, so no reverse-channel
- * reply rides it. */
-int esb_link_send(const uint8_t *data, size_t length, bool ack);
-
-/* Peripheral only.
- * Send the acked keepalive, this device's state snapshot. */
-void esb_link_send_keepalive(uint8_t state);
-
-/* Peripheral only. */
-void esb_link_send_relay_poll(void);
-
-/* Peripheral only.
- * Return -EINVAL for a value the radio rejects.
- * Busy radio defers the write to esb_link_apply_pending. */
-int esb_link_set_tx_power(int32_t dbm);
-int esb_link_set_retransmit_delay(uint32_t delay_us);
-void esb_link_set_retransmit_count(uint8_t count);
-
-void esb_link_apply_pending(void);
-
-/* Peripheral only.
- * Returns the encoded length, 0 when out_size is too small. */
-uint8_t esb_link_keepalive_fill(uint8_t *out, size_t out_size, uint8_t state);
-
-#if defined(CONFIG_ZMK_SPLIT_ESB_WIRE_RELAY)
-/* One packet under the wire peer's pipe. */
-int esb_link_send_relay(const uint8_t *data, size_t length, bool ack);
-#endif
-#endif
-
-#if defined(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
-/* Central only.
- * True when the pipe's DT role is "relay" (downlink sink, no upstream events). */
+/* True when the pipe's DT role is "relay" (downlink sink, no upstream events). */
 bool esb_link_pipe_is_relay(uint8_t pipe);
 
 bool esb_link_pipe_is_self(uint8_t pipe);
 
-/* Central only.
- * Fill out_ids with the peripheral source ids (= pipe numbers), self and relay pipes left out.
+/* Fill out_ids with the peripheral source ids (= pipe numbers), self and relay pipes left out.
  * Returns the count. */
 uint8_t esb_link_source_ids(uint8_t *out_ids);
 
-/* Central only.
- * Queue one packet to ride peripheral `pipe`'s next ACK back to it.
+/* Queue one packet to ride peripheral `pipe`'s next ACK back to it.
  * Returns -EMSGSIZE on empty or oversize payload, -ENOBUFS if the reply queue is full. */
 int esb_link_stage_reply(uint8_t pipe, const uint8_t *data, size_t length);
 
-/* Central only.
- * Latest value for a poll with nothing queued, newest call wins.
+/* Latest value for a poll with nothing queued, newest call wins.
  * Dropped once a reply is staged after it, so it never undoes a queued change. */
 int esb_link_latch_idle_reply(uint8_t pipe, const uint8_t *data, size_t length);
 
@@ -90,7 +43,5 @@ enum esb_link_control {
     ESB_LINK_CONTROL_COUNT,
 };
 
-/* Central only. */
 int esb_link_latch_control(uint8_t pipe, enum esb_link_control kind, const uint8_t *data,
                            size_t length);
-#endif

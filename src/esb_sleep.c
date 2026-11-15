@@ -28,11 +28,6 @@ static int esb_sleep_listener(const zmk_event_t *eh) {
     if (atomic_cas(&asleep, 1, 0)) {
         (void)esb_link_set_enabled(true);
     }
-    if (ev->state == ZMK_ACTIVITY_IDLE) {
-        esb_link_set_idle(true);
-    } else if (ev->state == ZMK_ACTIVITY_ACTIVE) {
-        esb_link_set_idle(false);
-    }
     return 0;
 }
 

@@ -52,88 +52,15 @@ MOCK_CASES += \
 	central_hid_relay/idle_ack \
 	central_hid_relay/indicators \
 	central_hid_relay/mouse_keys \
-	central_hid_relay/peripheral_motion_lossless \
-	central_hid_relay/peripheral_motion_lossy \
 	central_hid_relay/pointer \
 	central_hid_relay/pointer_retry \
 	central_hid_relay/poll \
 	central_hid_relay/relay_poll_carries_new_motion_lossless \
 	central_hid_relay/relay_poll_carries_new_motion_lossy \
 	central_hid_relay/tap \
-	central_hid_relay/totals \
-	esb_link/rx_ring \
 	event_codec \
-	hid_relay_dongle/busy_channel \
-	hid_relay_dongle/host_leds \
-	hid_relay_dongle/lost_sweep \
-	hid_relay_dongle/pointer_busy_sink_motion_carried \
-	hid_relay_dongle/pointer_button_change_not_skippable \
-	hid_relay_dongle/pointer_first_total_sets_baseline \
-	hid_relay_dongle/pointer_gap_past_cap_resyncs \
-	hid_relay_dongle/pointer_motion_with_button_held_skippable \
-	hid_relay_dongle/pointer_repeated_total_dropped \
-	hid_relay_dongle/pointer_silence_rebaselines \
-	hid_relay_dongle/poll \
-	hid_relay_dongle/reports \
-	hid_relay_dongle/usb_drain \
-	input_batch \
-	peripheral/adaptive_retransmits \
-	peripheral/bad_channel_lossless \
-	peripheral/bad_channel_lossy \
-	peripheral/beacon_longer_keeps_epoch \
-	peripheral/beacon_shorter_keeps_epoch \
-	peripheral/beacon_wrong_length_flags_mismatch \
-	peripheral/beacon_wrong_length_keeps_hid_state \
-	peripheral/beacon_wrong_length_keeps_peer_table \
-	peripheral/beacon_wrong_length_warns_once \
-	peripheral/burst_keepalive \
-	peripheral/burst_start_keepalive \
-	peripheral/busy_keys \
-	peripheral/busy_pointer_lossless \
-	peripheral/busy_pointer_lossy \
-	peripheral/epoch_adoption \
-	peripheral/held_input \
-	peripheral/idle_clock \
-	peripheral/idle_keepalive \
-	peripheral/keepalive \
-	peripheral/lossy_drop \
-	peripheral/lost_tap \
-	peripheral/mask_wrong_length_discarded \
-	peripheral/mask_wrong_length_flags_mismatch \
-	peripheral/mask_wrong_length_warns_once \
-	peripheral/matching_lengths_leave_mismatch_clear \
-	peripheral/pointer_lossless \
-	peripheral/pointer_lossy \
-	peripheral/rendezvous \
-	peripheral/restart_retune \
-	peripheral/sleep \
-	peripheral/startup_order \
-	peripheral/tx_failed_exhausted_drops_link_to_searching \
-	peripheral/tx_failed_flushed_press_kept_in_keepalive \
-	peripheral/tx_failed_one_in_16_keeps_channel_lossless \
-	peripheral/tx_failed_one_in_16_keeps_channel_lossy \
-	peripheral/tx_failed_restarts_capped_then_flushes \
-	peripheral/tx_failed_while_searching_flushes \
-	peripheral/tx_restart_count_clears_after_success \
-	peripheral/tx_stall \
 	wire/central_hid_state \
-	wire/central_simplex \
-	wire/peer_beacon_wrong_length_flags_mismatch \
-	wire/peer_beacon_wrong_length_keeps_hid_state \
-	wire/peer_beacon_wrong_length_warns_once \
-	wire/peer_held_input \
-	wire/peer_hid_state \
-	wire/peer_idle_keepalive \
-	wire/peer_matching_beacon_leaves_mismatch_clear \
-	wire/peer_simplex \
-	wire/peer_status_searching_until_frame \
-	wire/peer_status_simplex_not_searching \
-	wire/peer_status_without_radio_reads_zero \
-	wire/relay_beacon_rssi \
-	wire/relay_downlink \
-	wire/relay_hid_state \
-	wire/relay_simplex \
-	wire/relay_uplink
+	wire/central_simplex
 MOCK_TARGETS := $(addprefix mock-test-,$(MOCK_CASES))
 
 .PHONY: unit-test native-sim-test mock-test $(MOCK_TARGETS)

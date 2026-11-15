@@ -1,7 +1,7 @@
 // Copyright 2026 Roman Kuzmitskii (@damex)
 // SPDX-License-Identifier: MIT
 
-/* Hop engine channel table and radio retune, both roles. */
+/* Central hop engine channel table and radio retune. */
 #define DT_DRV_COMPAT zmk_split_esb
 
 #include <zephyr/devicetree.h>
@@ -29,13 +29,9 @@ static void apply_channel_index(uint8_t index) {
         return;
     }
     unsigned int key = irq_lock();
-#if IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
     esb_stop_rx();
     int set_error = esb_set_rf_channel(hop_channels[index]);
     esb_start_rx();
-#else
-    int set_error = esb_set_rf_channel(hop_channels[index]);
-#endif
     irq_unlock(key);
     if (set_error == 0) {
         applied_index = index;

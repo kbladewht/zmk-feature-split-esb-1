@@ -10,7 +10,6 @@
 
 #include <zephyr/sys/__assert.h>
 #include <zephyr/sys/util.h>
-#include <zephyr/sys_clock.h>
 
 #include "esb_keepalive.h"
 #include "hop_policy.h"
@@ -20,91 +19,6 @@ uint8_t hop_policy_saturating_add(uint8_t value, uint8_t add) {
         return UINT8_MAX;
     }
     return (uint8_t)(value + add);
-}
-
-bool hop_policy_should_hop(uint8_t *bad_windows, uint8_t penalty, uint16_t threshold) {
-    __ASSERT_NO_MSG(bad_windows != NULL);
-    if (penalty == 0) {
-        *bad_windows = 0;
-        return false;
-    }
-    *bad_windows = hop_policy_saturating_add(*bad_windows, penalty);
-    if (*bad_windows >= threshold) {
-        *bad_windows = 0;
-        return true;
-    }
-    return false;
-}
-
-uint8_t hop_policy_attempts_penalty(uint8_t attempts, uint8_t good_attempts) {
-    if (attempts <= good_attempts) {
-        return 0;
-    }
-    int over = (int)attempts - (int)good_attempts;
-    int penalty = 1 + over / HOP_POLICY_TX_ATTEMPTS_GRADE_STEP;
-    if (penalty > HOP_POLICY_MAX_LOSS_PENALTY) {
-        penalty = HOP_POLICY_MAX_LOSS_PENALTY;
-    }
-    return (uint8_t)penalty;
-}
-
-uint8_t hop_policy_window_attempts(uint32_t attempts_sum, uint32_t packets) {
-    if (packets == 0) {
-        return 0;
-    }
-    uint32_t mean = attempts_sum / packets;
-    if (attempts_sum % packets != 0) {
-        mean++;
-    }
-    return (uint8_t)MIN(mean, UINT8_MAX);
-}
-
-uint8_t hop_policy_acked_window_attempts(uint32_t attempts_sum,
-                                         uint32_t packets,
-                                         uint32_t noack_packets) {
-    if (noack_packets >= packets) {
-        return 0;
-    }
-    return hop_policy_window_attempts(attempts_sum - noack_packets, packets - noack_packets);
-}
-
-uint16_t hop_policy_ewma_update(uint16_t ewma_x10, uint8_t sample) {
-    int32_t sample_x10 = (int32_t)sample * 10;
-    int32_t difference = sample_x10 - (int32_t)ewma_x10;
-    int32_t delta = difference / (1 << HOP_POLICY_ATTEMPTS_EWMA_SHIFT);
-    if (delta == 0 && difference > 0) {
-        delta = 1;
-    }
-    if (delta == 0 && difference < 0) {
-        delta = -1;
-    }
-    return (uint16_t)((int32_t)ewma_x10 + delta);
-}
-
-uint8_t hop_policy_adaptive_retransmits(uint16_t ewma_x10, uint8_t count_min, uint8_t count_max) {
-    __ASSERT_NO_MSG(count_min <= count_max);
-    if (ewma_x10 <= HOP_POLICY_RETRY_EWMA_LOW_X10) {
-        return count_min;
-    }
-    if (ewma_x10 >= HOP_POLICY_RETRY_EWMA_HIGH_X10) {
-        return count_max;
-    }
-    uint32_t span = HOP_POLICY_RETRY_EWMA_HIGH_X10 - HOP_POLICY_RETRY_EWMA_LOW_X10;
-    uint32_t into = (uint32_t)ewma_x10 - HOP_POLICY_RETRY_EWMA_LOW_X10;
-    return (uint8_t)(count_min + (into * (uint32_t)(count_max - count_min)) / span);
-}
-
-bool hop_policy_hfclk_release_allowed(bool gating, bool radio_idle) {
-    if (!gating) {
-        return false;
-    }
-    return radio_idle;
-}
-
-uint32_t hop_policy_retry_cycle_ms(uint8_t count, uint16_t delay_us, uint8_t margin,
-                                   uint32_t floor_ms) {
-    uint32_t cycle_us = (uint32_t)margin * count * delay_us;
-    return MAX(floor_ms, cycle_us / USEC_PER_MSEC);
 }
 
 bool hop_policy_keepalive_is_active(uint8_t byte) {
@@ -125,11 +39,6 @@ uint8_t hop_policy_loss_penalty(int8_t rssi_dbm, int8_t floor_dbm) {
         penalty = HOP_POLICY_MAX_LOSS_PENALTY;
     }
     return (uint8_t)penalty;
-}
-
-uint8_t hop_policy_index_next(uint8_t index, size_t count) {
-    __ASSERT_NO_MSG(count > 0);
-    return (uint8_t)(((size_t)index + 1U) % count);
 }
 
 uint8_t hop_policy_channel_for_epoch(uint16_t epoch, size_t hop_count) {
