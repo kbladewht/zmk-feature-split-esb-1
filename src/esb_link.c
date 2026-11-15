@@ -55,6 +55,7 @@ static void esb_link_event_handler(const struct esb_evt *event)
         break;
     case ESB_EVENT_RX_RECEIVED: {
         struct esb_payload payload = {0};
+        LOG_INF("RX event received");
         int error = esb_read_rx_payload(&payload);
         if (error != 0) {
             LOG_ERR("ESB RX payload read failed (%d)", error);
@@ -72,7 +73,7 @@ static void esb_link_event_handler(const struct esb_evt *event)
 
 static int configure_radio(void)
 {
-    int error = esb_set_address_length(address_length);
+    int error = esb_set_address_length(5);
     if (error == 0) {
         error = esb_set_rf_channel(26);
     }
@@ -83,7 +84,7 @@ static int configure_radio(void)
         error = esb_set_base_address_1(base_addr_1);
     }
     if (error == 0) {
-        error = esb_set_prefixes(peripheral_prefixes, PERIPHERAL_COUNT);
+        error = esb_set_prefixes(peripheral_prefixes, 4);
     }
     return error;
 }
