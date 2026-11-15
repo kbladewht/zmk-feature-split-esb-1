@@ -130,6 +130,7 @@ static void on_esb_event(const struct esb_evt *event) {
             if (hop_consume_rx(payload.pipe, payload.data, payload.length, payload.rssi)) {
                 continue; /* control packet (keepalive or beacon), not queued */
             }
+            //Zephyr 提供的 SPSC (Single Producer Single Consumer) Lock-Free Queue API
             struct esb_link_packet *slot = spsc_acquire(&rx_spsc);
             if (slot == NULL) {
                 LOG_DBG("RX ring full, dropping packet");

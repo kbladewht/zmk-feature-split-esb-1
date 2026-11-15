@@ -37,11 +37,8 @@ static zmk_split_transport_central_status_changed_cb_t status_cb;
 
 static enum zmk_split_transport_connections_status central_connections_status(void);
 
-static int central_send_command(uint8_t source,
-                                struct zmk_split_transport_central_command command) {
-    // LOG_WRN("22 spayload len is  %d max len is % d ,pip is %d", 
-    //     sizeof(command),CONFIG_ZMK_SPLIT_ESB_MAX_PAYLOAD,
-    //         source);
+static int central_send_command(uint8_t source,struct zmk_split_transport_central_command command) {
+    LOG_WRN(" ccccc === central_send_command is  %d  ,pip is %d",  sizeof(command), source);
 //    LOG_HEXDUMP_INF(&command, sizeof(command), "command:");
     return esb_link_stage_reply(source, (const uint8_t *)&command, sizeof(command));
 }
@@ -297,6 +294,7 @@ static void central_on_rx(uint8_t pipe, const uint8_t *data, size_t length) {
         pipe_last_heard_ms[pipe] = k_uptime_get_32();
         pipe_heard[pipe] = true;
     }
+    //如果是心跳包skip
     if (esb_keepalive_matches(data, (uint8_t)length)) {
         struct central_inbound inbound = {
             .source = pipe,
@@ -318,11 +316,13 @@ static void central_on_rx(uint8_t pipe, const uint8_t *data, size_t length) {
         struct zmk_split_transport_peripheral_event event;
         size_t consumed = esb_wire_decode_event(&data[offset], length - offset, &event);
         if (consumed == 0) {
+            //解码失败,跳过
             LOG_WRN("Dropping packet, undecodable event at offset %u", (unsigned int)offset);
             LOG_HEXDUMP_DBG(data, length, "undecodable payload");
             return;
         }
         offset += consumed;
+        //核心逻辑按键触发 888888
         if (event.type == ZMK_SPLIT_TRANSPORT_PERIPHERAL_EVENT_TYPE_INPUT_EVENT) {
             if (pipe < CENTRAL_PIPE_MAX && event.data.input_event.reg < CENTRAL_INPUT_REG_MAX) {
                 pipe_seen_input_regs[pipe] |= BIT(event.data.input_event.reg);

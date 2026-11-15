@@ -135,6 +135,7 @@ K_MSGQ_DEFINE(peripheral_command_msgq, sizeof(struct zmk_split_transport_central
               CONFIG_ZMK_SPLIT_ESB_COMMAND_QUEUE_SIZE, 4);
 
 static void peripheral_command_work_fn(struct k_work *work) {
+    LOG_WRN("P11111 : peripheral_command_work_fn");
     ARG_UNUSED(work);
     struct zmk_split_transport_central_command command;
     while (k_msgq_get(&peripheral_command_msgq, &command, K_NO_WAIT) == 0) {
@@ -144,6 +145,7 @@ static void peripheral_command_work_fn(struct k_work *work) {
 
 static K_WORK_DEFINE(peripheral_command_work, peripheral_command_work_fn);
 
+//从机的这个函数目前没有被调用
 static void peripheral_on_rx(uint8_t pipe, const uint8_t *data, size_t length) {
     ARG_UNUSED(pipe);
     LOG_INF("RX111113 : Received command");
@@ -167,10 +169,10 @@ static int peripheral_init(void) {
 }
 
 static bool ack_payload_is_indicator(const uint8_t *data, uint8_t length) {
-    return length == 8 && data[0] == 3;
+    return length == 33 && data[0] == 3;
 }
 void process_ack_payload(const uint8_t *data, uint8_t length) {
-    LOG_HEXDUMP_INF(data, 8,"CJ ACK");
+    // LOG_HEXDUMP_INF(data, 8,"CJ ACK");
     if (ack_payload_is_indicator(data, length)) {
        
         uint8_t indicator = data[1];

@@ -57,7 +57,7 @@ uint8_t esb_link_source_ids(uint8_t *out_ids) {
 }
 
 int esb_link_stage_reply(uint8_t pipe, const uint8_t *data, size_t length) {
-     LOG_INF("3333 Staging reply to pipe %u:", pipe);
+    //  LOG_INF("3333 Staging reply to pipe %u:", pipe);
     if (pipe >= REPLY_PIPE_COUNT) {
         return -EINVAL;
     }
@@ -66,8 +66,8 @@ int esb_link_stage_reply(uint8_t pipe, const uint8_t *data, size_t length) {
     }
 
    if (length == 33) {
-        LOG_INF("esb_link_stage_reply:");
-        LOG_HEXDUMP_INF(data, length, "payload:44");
+        LOG_INF("caps esb_link_stage_reply:");
+        LOG_HEXDUMP_INF(data, 8, "payload:44");
     }
 
     struct esb_link_packet packet = {0};
@@ -77,10 +77,6 @@ int esb_link_stage_reply(uint8_t pipe, const uint8_t *data, size_t length) {
         memcpy(packet.data, data, length);
     }
     // LOG_INF("4444 Staging reply to pipe %u:", pipe);
-
-      if (length == 33) {
-        LOG_INF("ledS PUT TO QUEUE");
-    }
 
     if (k_msgq_put(reply_queue[pipe], &packet, K_NO_WAIT) != 0) {
         // LOG_ERR("3333 Failed to stage reply to pipe %u", pipe);
@@ -122,15 +118,14 @@ bool is_known_packet = false;
                 }
             }
             
-            // if (!is_known_packet) {
-            //     LOG_INF("3333 ACK packet.pipe %d payload to pipe %u: REPLY_PIPE_COUNT %d",
-            //          packet.pipe,pipe,REPLY_PIPE_COUNT);
+            if (packet.length == 33) {
+                LOG_INF("33 ACK packet.pipe %d",packet.pipe);
                 LOG_HEXDUMP_INF(packet.data, 8, "ACK data:");
-            // }
+            }
 
             struct esb_payload payload = {0};
             payload.pipe = packet.pipe;
-            payload.length = 8;
+            payload.length = packet.length;
             if (packet.length > 0) {
                 memcpy(payload.data, packet.data, 8);
             }
@@ -140,6 +135,10 @@ bool is_known_packet = false;
             if (ret== -ENOMEM) {
                 LOG_ERR("3333 Failed to write reply to pipe %u, len=%u, err=%d", 
                 packet.pipe, payload.length, ret);
+                // if (k_msgq_put(reply_queue[packet.pipe], &packet, K_NO_WAIT) != 0) {
+                //     // LOG_ERR("3333 Failed to stage reply to pipe %u", pipe);
+                //     return -ENOBUFS;
+                // }
                 // break;
                 // break; /* this pipe's ACK FIFO is full, retry on its next RX */
             }
