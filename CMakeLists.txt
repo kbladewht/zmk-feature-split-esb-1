@@ -8,6 +8,7 @@ if(CONFIG_ZMK_SPLIT_ESB)
   zephyr_library_compile_options(
       -Werror
       -Wextra
+      -Wno-unused
       -Wshadow
       -Wformat=2
       -Wlogical-op

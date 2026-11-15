@@ -5,6 +5,7 @@ menuconfig ZMK_SPLIT_ESB
     bool "ZMK ESB split transport"
     depends on ZMK_SPLIT && ZMK_SPLIT_ROLE_CENTRAL
     select DYNAMIC_INTERRUPTS
+    select DYNAMIC_DIRECT_INTERRUPTS
     help
       Central-side Enhanced ShockBurst (2.4 GHz) split transport for one or more
       peripherals. One ESB packet carries one complete split message.

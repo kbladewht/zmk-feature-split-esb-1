@@ -5,6 +5,7 @@
 #define DT_DRV_COMPAT zmk_split_esb
 
 #include <zephyr/kernel.h>
+#include <zephyr/irq.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/atomic.h>
 #include <zephyr/sys/util.h>
@@ -33,6 +34,10 @@ static const uint8_t address_length = DT_INST_PROP(0, address_length);
 static const int8_t tx_power_dbm = DT_INST_PROP(0, tx_power_dbm);
 
 static nrf_esb_payload_t rx_payload;
+static atomic_t radio_irq_selftest_pending;
+static atomic_t radio_hw_event_logged;
+static atomic_t esb_irq_selftest_pending;
+static atomic_t esb_irq_logged;
 
 static void nrf_esb_event_handler_n(nrf_esb_evt_t const *p_event)
 {
@@ -42,6 +47,7 @@ static void nrf_esb_event_handler_n(nrf_esb_evt_t const *p_event)
         case NRF_ESB_EVENT_TX_FAILED:
             break;
         case NRF_ESB_EVENT_RX_RECEIVED:
+            LOG_INF("RX received, reading payload");
             if (nrf_esb_read_rx_payload(&rx_payload) == NRF_SUCCESS) {
                 LOG_INF("Received payload on pipe %d, length %d", rx_payload.pipe, rx_payload.length);
             }
@@ -64,6 +70,73 @@ static atomic_t link_ready;
 
 static int radio_rx_start(void) {
     return esb_link_nrf_status_to_errno(nrf_esb_start_rx());
+}
+
+extern void RADIO_IRQHandler(void);
+extern void ESB_EVT_IRQHandler(void);
+
+static void radio_irq_wrapper(const void *arg) {
+    ARG_UNUSED(arg);
+    bool radio_event = NRF_RADIO->EVENTS_READY || NRF_RADIO->EVENTS_END ||
+                       NRF_RADIO->EVENTS_DISABLED;
+    if (atomic_cas(&radio_irq_selftest_pending, 1, 0)) {
+        LOG_INF("ESB RADIO IRQ self-test dispatched");
+    } else if (radio_event && atomic_cas(&radio_hw_event_logged, 0, 1)) {
+        LOG_INF("ESB RADIO hardware event reached");
+    }
+    RADIO_IRQHandler();
+    ISR_DIRECT_PM();
+}
+
+static void esb_event_irq_wrapper(const void *arg) {
+    ARG_UNUSED(arg);
+    if (atomic_cas(&esb_irq_selftest_pending, 1, 0)) {
+        LOG_INF("ESB event IRQ self-test dispatched");
+    } else if (atomic_cas(&esb_irq_logged, 0, 1)) {
+        LOG_INF("ESB event IRQ reached");
+    }
+    ESB_EVT_IRQHandler();
+    ISR_DIRECT_PM();
+}
+extern void esb_radio_irq_handler(void);
+extern void esb_evt_irq_handler(void);
+static void radio_irq_handler(const void *arg)
+{
+    /* 关键：调 NCS ESB 内部 handler，它会清 EVENTS_* 并推进状态机 */
+    esb_radio_irq_handler();
+}
+
+static void esb_event_irq_handler(const void *arg)
+{
+    esb_evt_irq_handler();
+}
+
+static int connect_irq_handlers(void) {
+    irq_disable(RADIO_IRQn);
+    irq_disable(ESB_EVT_IRQ);
+
+    // ARM_IRQ_DIRECT_DYNAMIC_CONNECT(RADIO_IRQn, CONFIG_ZMK_SPLIT_ESB_RADIO_IRQ_PRIORITY, 0,
+    //                                reschedule);
+    // ARM_IRQ_DIRECT_DYNAMIC_CONNECT(ESB_EVT_IRQ, CONFIG_ZMK_SPLIT_ESB_EVENT_IRQ_PRIORITY, 0,
+    //                                reschedule);
+
+ /* 只保留 dynamic，删掉 ARM_IRQ_DIRECT_* */
+    int error = irq_connect_dynamic(RADIO_IRQn,
+                                     CONFIG_ZMK_SPLIT_ESB_RADIO_IRQ_PRIORITY,
+                                     radio_irq_handler, NULL, 0);
+    if (error < 0) {
+        return error;
+    }
+
+    error = irq_connect_dynamic(ESB_EVT_IRQ, CONFIG_ZMK_SPLIT_ESB_EVENT_IRQ_PRIORITY,
+                                esb_event_irq_handler, NULL, 0);
+    if (error < 0) {
+        return error;
+    }
+
+    irq_enable(RADIO_IRQn);
+    irq_enable(ESB_EVT_IRQ);
+    return 0;
 }
 
     uint8_t base_addr_0[4] = { 0xE7, 0xE7, 0xE7, 0xE7 };
@@ -90,15 +163,21 @@ int esb_link_init(void) {
     /* Reverse channel replies ride on ACKs requested by peripherals. */
     nrf_esb_config.selective_auto_ack = false;
 
+    error = connect_irq_handlers();
+    if (error) {
+        LOG_ERR("ESB IRQ connection failed (%d)", error);
+        return error;
+    }
+
     error = esb_link_nrf_status_to_errno(nrf_esb_init(&nrf_esb_config));
     if (error) {
         return error;
     }
 
-    error = esb_link_nrf_status_to_errno(nrf_esb_set_address_length(address_length));
-    if (error) {
-        return error;
-    }
+    // error = esb_link_nrf_status_to_errno(nrf_esb_set_address_length(address_length));
+    // if (error) {
+    //     return error;
+    // }
     error = esb_link_nrf_status_to_errno(nrf_esb_set_rf_channel(26));
     if (error) {
         return error;
@@ -120,8 +199,11 @@ int esb_link_init(void) {
     if (start_error) {
         return start_error;
     }
-    hop_start();
-    atomic_set(&link_ready, 1);
+    // atomic_set(&radio_irq_selftest_pending, 1);
+    // atomic_set(&esb_irq_selftest_pending, 1);
+    // NVIC_SetPendingIRQ(RADIO_IRQn);
+    // NVIC_SetPendingIRQ(ESB_EVT_IRQ);
+    LOG_INF("ESB PRX started on channel 26 (address length %u)", address_length);
     return 0;
 }
 
