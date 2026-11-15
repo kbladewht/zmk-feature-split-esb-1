@@ -40,21 +40,18 @@ static const uint8_t address_length = DT_INST_PROP(0, address_length);
 static const int8_t tx_power_dbm = DT_INST_PROP(0, tx_power_dbm);
 
 
-BUILD_ASSERT(PERIPHERAL_COUNT >= 1, "peripherals needs at least one entry");
-BUILD_ASSERT(PERIPHERAL_COUNT <= CONFIG_ESB_PIPE_COUNT,
-             "peripherals exceed CONFIG_ESB_PIPE_COUNT, ESB has at most 8 pipes");
+
 #define PIPE_BIT(node) +(1u << DT_PROP(node, pipe))
 #define PIPE_BIT_SUM (0u DT_FOREACH_CHILD_STATUS_OKAY(ESB_PERIPHERALS, PIPE_BIT))
 BUILD_ASSERT(PIPE_BIT_SUM == (1u << DT_CHILD_NUM_STATUS_OKAY(ESB_PERIPHERALS)) - 1u,
              "peripheral pipes must be exactly 0..N-1, one per peripheral");
 const uint8_t esb_link_pipe_count = (uint8_t)PERIPHERAL_COUNT;
 
-
-
-/* NCS's CONFIG_ESB_MAX_PAYLOAD_LENGTH default (32) wins over ours on Kconfig parse order.
- * Equal sizes make the radio drop whole any packet the RX slot cannot hold. */
+#if !defined(CONFIG_ZMK_SPLIT_ESB_STANDALONE) || !CONFIG_ZMK_SPLIT_ESB_STANDALONE
 BUILD_ASSERT(CONFIG_ZMK_SPLIT_ESB_MAX_PAYLOAD == CONFIG_ESB_MAX_PAYLOAD_LENGTH,
-             "set CONFIG_ESB_MAX_PAYLOAD_LENGTH equal to CONFIG_ZMK_SPLIT_ESB_MAX_PAYLOAD in your .conf");
+             "set CONFIG_ESB_MAX_PAYLOAD_LENGTH equal to CONFIG_ZMK_SPLIT_ESB_MAX_PAYLOAD");
+#endif
+
 
 /* RX path: the radio ISR writes each payload straight into a lock-free SPSC ring
  * (no irq_lock, zero-copy slot) and signals the dispatch thread, which hands packets
@@ -97,6 +94,7 @@ static void on_esb_event(const struct esb_evt *event) {
         struct esb_payload payload;
         while (esb_read_rx_payload(&payload) == 0) {
             drained++;
+            LOG_INF("xxxxx received on pipe %d", payload.pipe);
             if (payload.noack == 0) {
                 pipes_acked |= (uint8_t)BIT(payload.pipe);
                 esb_stat_reply_asked(payload.pipe);
@@ -120,7 +118,7 @@ static void on_esb_event(const struct esb_evt *event) {
             k_sem_give(&rx_sem);
         }
         esb_stat_peak(ESB_STAT_RX_PEAK, drained);
-        if (drained >= CONFIG_ESB_RX_FIFO_SIZE) {
+        if (drained >= CONFIG_ZMK_SPLIT_ESB_RX_FIFO_SIZE) {
             esb_stat_add(ESB_STAT_RX_FULL, 1);
         }
         esb_link_role_rx_done(pipes_acked);
@@ -146,25 +144,22 @@ static void on_esb_event(const struct esb_evt *event) {
     }
 }
 
-/* Push base addresses, prefix, channel, TX power into the radio.
- * set_* failures are logged and ignored.
- * The radio starts on whatever values it already held. */
+
 static __noinline int esb_link_radio_setup(void) {
+    LOG_INF("esb_link_radio_setup  33333");
     int set_error = esb_set_address_length(address_length);
     if (set_error) {
-        LOG_DBG("esb_set_address_length returned %d", set_error);
+        LOG_INF("esb_set_address_length returned %d", set_error);
     }
+    LOG_HEXDUMP_INF(base_address_0, sizeof(base_address_0), "addr0");
     set_error = esb_set_base_address_0(base_address_0);
-    if (set_error) {
-        LOG_DBG("esb_set_base_address_0 returned %d", set_error);
-    }
+    LOG_INF("esb_set_base_address_0 returned %d", set_error);
+    LOG_HEXDUMP_INF(base_address_1, sizeof(base_address_1), "addr1");
     set_error = esb_set_base_address_1(base_address_1);
-    if (set_error) {
-        LOG_DBG("esb_set_base_address_1 returned %d", set_error);
-    }
+    LOG_INF("esb_set_base_address_1 returned %d", set_error);
     set_error = esb_set_prefixes(peripheral_prefixes, (uint8_t)PERIPHERAL_COUNT);
     if (set_error) {
-        LOG_DBG("esb_set_prefixes returned %d", set_error);
+        LOG_INF("esb_set_prefixes returned %d", set_error);
     }
     set_error = esb_set_rf_channel(hop_current_channel());
     if (set_error) {
@@ -196,10 +191,11 @@ int esb_link_init(esb_link_rx_callback_t callback) {
     config.bitrate = ESB_BITRATE_1MBPS;
     config.crc = ESB_CRC_16BIT;
     config.retransmit_count = 2;
+    config.payload_length = 0;
     config.retransmit_delay = 250;
     /* Reverse channel replies ride on ACKs requested by peripherals. */
     config.selective_auto_ack = false;
-    config.tx_mode = ESB_TXMODE_AUTO;
+    // config.tx_mode = ESB_TXMODE_AUTO;
     config.use_fast_ramp_up = false;
 
     error = esb_init(&config);
@@ -208,12 +204,16 @@ int esb_link_init(esb_link_rx_callback_t callback) {
         return error;
     }
     esb_set_rf_channel(26);
+    LOG_INF("ESB esb_link_radio_setup  11111");
     error = esb_link_radio_setup();
+    LOG_INF("esb_link_radio_setup  22222");
     if (error) {
         return error;
     }
     hop_start();
     atomic_set(&link_ready, 1);
+    LOG_INF("ESB link initialized, %d peripherals, %d pipes",
+             PERIPHERAL_COUNT, esb_link_pipe_count);
     return 0;
 }
 

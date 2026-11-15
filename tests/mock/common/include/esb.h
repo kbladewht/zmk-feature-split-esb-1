@@ -18,7 +18,7 @@
         .retransmit_delay = 600,                                                                   \
         .retransmit_count = 3,                                                                     \
         .tx_mode = ESB_TXMODE_AUTO,                                                                \
-        .payload_length = 32,                                                                      \
+        .c = 32,                                                                                  \
         .selective_auto_ack = false,                                                               \
         .use_fast_ramp_up = false,                                                                 \
     }

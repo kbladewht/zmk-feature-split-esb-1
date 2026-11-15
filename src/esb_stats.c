@@ -24,8 +24,8 @@ LOG_MODULE_DECLARE(zmk_split_esb, CONFIG_ZMK_SPLIT_ESB_LOG_LEVEL);
 #define PIPE_COUNT DT_CHILD_NUM_STATUS_OKAY(DT_INST_CHILD(0, peripherals))
 #define STATS_PERIOD_MS 1000
 
-static const uint32_t rx_queue_size = CONFIG_ESB_RX_FIFO_SIZE;
-static const uint32_t tx_queue_size = CONFIG_ESB_TX_FIFO_SIZE;
+static const uint32_t rx_queue_size = CONFIG_ZMK_SPLIT_ESB_RX_FIFO_SIZE;
+static const uint32_t tx_queue_size = CONFIG_ZMK_SPLIT_ESB_TX_FIFO_SIZE;
 static atomic_t counts[ESB_STAT_COUNT];
 static atomic_t tx_queued;
 static atomic_t received_counts[PIPE_COUNT];

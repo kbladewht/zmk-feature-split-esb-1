@@ -31,6 +31,36 @@ if(CONFIG_ZMK_SPLIT_ESB)
   zephyr_library_sources(src/esb_wire.c)
   zephyr_library_sources(src/esb_link.c)
   zephyr_library_sources(src/esb_link_hfclk.c)
+  if(CONFIG_ZMK_SPLIT_ESB_STANDALONE)
+    if(NOT EXISTS "${CONFIG_ZMK_SPLIT_ESB_NRF5_SDK_PATH}/components/libraries/util/app_util.h" OR
+       NOT EXISTS "${CONFIG_ZMK_SPLIT_ESB_NRF5_SDK_PATH}/components/drivers_nrf/nrf_soc_nosd/nrf_error.h")
+      message(FATAL_ERROR
+        "ZMK_SPLIT_ESB_STANDALONE requires a valid nRF5 SDK 17.1 path; "
+        "set CONFIG_ZMK_SPLIT_ESB_NRF5_SDK_PATH")
+    endif()
+    zephyr_library_include_directories(
+        src/standalone_esb/sdk_compat
+        src/standalone_esb/nrf5sdk
+        "${CONFIG_ZMK_SPLIT_ESB_NRF5_SDK_PATH}/components/libraries/util"
+        "${CONFIG_ZMK_SPLIT_ESB_NRF5_SDK_PATH}/components/libraries/delay"
+        "${CONFIG_ZMK_SPLIT_ESB_NRF5_SDK_PATH}/components/drivers_nrf/nrf_soc_nosd"
+        "${CONFIG_ZMK_SPLIT_ESB_NRF5_SDK_PATH}/modules/nrfx/hal"
+        "${CONFIG_ZMK_SPLIT_ESB_NRF5_SDK_PATH}/modules/nrfx/mdk"
+    )
+    zephyr_library_compile_definitions(
+        NRF_ESB_MAX_PAYLOAD_LENGTH=${CONFIG_ZMK_SPLIT_ESB_MAX_PAYLOAD}
+        CONFIG_ESB_MAX_PAYLOAD_LENGTH=${CONFIG_ZMK_SPLIT_ESB_MAX_PAYLOAD}
+    )
+    zephyr_library_sources(
+        src/standalone_esb/nrf5sdk/nrf_esb.c
+        src/standalone_esb/nrf_esb_compat.c
+    )
+    set_source_files_properties(
+        "${CMAKE_CURRENT_LIST_DIR}/src/standalone_esb/nrf5sdk/nrf_esb.c"
+        PROPERTIES COMPILE_OPTIONS
+        "-Wno-old-style-definition;-Wno-missing-prototypes;-Wno-missing-declarations;-Wno-switch-default;-Wno-unused-parameter"
+    )
+  endif()
   zephyr_library_sources(src/hop.c)
   zephyr_library_sources(src/hop_policy.c)
   zephyr_library_sources(src/spsc_latch.c)

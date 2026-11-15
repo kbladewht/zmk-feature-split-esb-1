@@ -4,7 +4,7 @@
 menuconfig ZMK_SPLIT_ESB
     bool "ZMK ESB split transport"
     depends on ZMK_SPLIT && ZMK_SPLIT_ROLE_CENTRAL
-    select ESB
+    select ESB if !ZMK_SPLIT_ESB_STANDALONE
     help
       Central-side Enhanced ShockBurst (2.4 GHz) split transport for one or more
       peripherals. One ESB packet carries one complete split message.
@@ -12,11 +12,51 @@ menuconfig ZMK_SPLIT_ESB
 
 if ZMK_SPLIT_ESB
 
+config ZMK_SPLIT_ESB_STANDALONE
+    bool "Use the nRF5 SDK 17.1 ESB driver without MPSL"
+    depends on SOC_SERIES_NRF52X && HAS_HW_NRF_PPI
+    default n
+    select DYNAMIC_INTERRUPTS
+    help
+      Build the nRF5 SDK 17.1 ESB driver as a module source instead of the
+      NCS ESB driver. The SDK path must be configured below.
+
+config ZMK_SPLIT_ESB_NRF5_SDK_PATH
+    string "nRF5 SDK 17.1 root directory"
+    depends on ZMK_SPLIT_ESB_STANDALONE
+    help
+      Path to the nRF5 SDK 17.1.0 directory containing components/proprietary_rf/esb.
+
 config ZMK_SPLIT_ESB_MAX_PAYLOAD
     int "Max on-air payload bytes"
     default 48
+    range 1 252
     help
       Must be >= the largest split message struct. A build assert checks this.
+
+config ZMK_SPLIT_ESB_TX_FIFO_SIZE
+    int "TX FIFO size"
+    default 8 if ZMK_SPLIT_ESB_STANDALONE
+    default ESB_TX_FIFO_SIZE
+
+config ZMK_SPLIT_ESB_RX_FIFO_SIZE
+    int
+    default 8
+
+config ZMK_SPLIT_ESB_PIPE_COUNT
+    int
+    default 8
+    range 1 8
+
+config ZMK_SPLIT_ESB_RADIO_IRQ_PRIORITY
+    int
+    depends on ZMK_SPLIT_ESB_STANDALONE
+    default 1
+
+config ZMK_SPLIT_ESB_EVENT_IRQ_PRIORITY
+    int
+    depends on ZMK_SPLIT_ESB_STANDALONE
+    default 2
 
 config ZMK_SPLIT_ESB_RX_QUEUE_SIZE
     int "Received-packet ring depth (power of 2)"

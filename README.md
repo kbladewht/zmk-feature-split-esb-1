@@ -43,14 +43,31 @@ CONFIG_ESB_MAX_PAYLOAD_LENGTH=48
 The module supports the central role only; peripheral endpoints require a separate
 compatible implementation. Set `CONFIG_ZMK_SPLIT_ROLE_CENTRAL=y` on the central.
 
-Set `CONFIG_ESB_MAX_PAYLOAD_LENGTH` equal to `ZMK_SPLIT_ESB_MAX_PAYLOAD` (48)
-on the central and compatible peer firmware. sdk-nrf default is 32, build assert catches it.
-Set `CONFIG_ESB_TX_FIFO_SIZE` on a central to twice its peripheral count or more,
-build assert catches it. Each pipe holds up to two ACK replies. sdk-nrf's 8 covers
-four peripherals. On a central with `CONFIG_ZMK_SPLIT_ESB_HID_RELAY=y`, raise
-`CONFIG_ESB_RX_FIFO_SIZE` above sdk-nrf's 8. Relay polls can overflow it, and a packet
-arriving then drops without an ACK. Size it with the link counters: `full` above 0
-means it overflowed.
+By default, the central uses sdk-nrf ESB. Set `CONFIG_ESB_MAX_PAYLOAD_LENGTH`
+equal to `ZMK_SPLIT_ESB_MAX_PAYLOAD` (48) on the central and compatible peer
+firmware. sdk-nrf defaults to 32; a build assert catches a mismatch. Set
+`CONFIG_ESB_TX_FIFO_SIZE` to at least twice the peripheral count. Each pipe holds
+up to two ACK replies. sdk-nrf's default of 8 covers four peripherals.
+
+To use the nRF5 SDK 17.1 driver without MPSL, select the module-owned backend and
+provide the SDK root for its support headers:
+```conf
+CONFIG_ZMK_SPLIT_ESB_STANDALONE=y
+CONFIG_ZMK_SPLIT_ESB_NRF5_SDK_PATH="C:/path/to/nRF5_SDK_17.1.0"
+CONFIG_ZMK_SPLIT_ESB_MAX_PAYLOAD=48
+CONFIG_ZMK_SPLIT_ESB_TX_FIFO_SIZE=8
+CONFIG_ESB=n
+```
+The SDK's `nrf_esb.c` and headers are copied into `src/standalone_esb/nrf5sdk`
+with their original Nordic license notices. A small Zephyr API/IRQ bridge and
+compatibility headers connect it to the module. This backend uses the SDK's
+fixed RADIO, SWI0, TIMER2, and PPI channels 10-13, so those resources must not
+be used by other drivers.
+
+On a central with `CONFIG_ZMK_SPLIT_ESB_HID_RELAY=y`, raise the RX FIFO size
+above the selected driver default (8). Relay polls can overflow it, and a packet
+arriving then drops without an ACK. Size it with the link counters: `full` above
+0 means it overflowed.
 
 The central DTS lists each remote peripheral under `peripherals`. The examples
 below also show the peer-side configuration expected by a compatible firmware.
@@ -461,14 +478,16 @@ Workspace dependencies pulled by `west.yml`. Each keeps its own license:
 | ZMK | MIT |
 | Zephyr | Apache-2.0 |
 | sdk-nrf | LicenseRef-Nordic-5-Clause |
+| nRF5 SDK 17.1 ESB source under `src/standalone_esb/nrf5sdk/` | LicenseRef-Nordic-5-Clause |
 | nrfxlib | LicenseRef-Nordic-5-Clause (parts this module's builds touch: MPSL, softdevice_controller) |
 
 The `LicenseRef-Nordic-5-Clause` parts restrict use to Nordic hardware.
 
-For an ESB-only build the link symbols come from sdk-nrf.
-nrfxlib is still cloned into your workspace and gets linked if you also enable BLE.
+The default ESB backend comes from sdk-nrf. The optional nRF5 SDK 17.1 backend
+uses the vendored ESB source above. nrfxlib is still cloned into your workspace
+and gets linked if you also enable BLE.
 
 Patches under `zephyr/patches/nrf/` modify sdk-nrf files (Nordic-licensed).
-`modules/modules.cmake` applies them at cmake configure. Nordic source not
-redistributed. `patches.yml` names the upstream version after which each patch
-can be dropped.
+`modules/modules.cmake` applies them at cmake configure. Other Nordic SDK source
+is not redistributed. `patches.yml` names the upstream version after which each
+patch can be dropped.
