@@ -38,31 +38,20 @@ CONFIG_ZMK_SPLIT=y
 CONFIG_ZMK_SPLIT_BLE=n
 CONFIG_ZMK_SPLIT_WIRED=n
 CONFIG_ZMK_SPLIT_ESB=y
-CONFIG_ESB_MAX_PAYLOAD_LENGTH=48
+CONFIG_ZMK_SPLIT_ESB_MAX_PAYLOAD=48
+CONFIG_ZMK_SPLIT_ESB_NRF5_SDK_PATH="C:/path/to/nRF5_SDK_17.1.0"
+CONFIG_ESB=n
 ```
 The module supports the central role only; peripheral endpoints require a separate
 compatible implementation. Set `CONFIG_ZMK_SPLIT_ROLE_CENTRAL=y` on the central.
 
-By default, the central uses sdk-nrf ESB. Set `CONFIG_ESB_MAX_PAYLOAD_LENGTH`
-equal to `ZMK_SPLIT_ESB_MAX_PAYLOAD` (48) on the central and compatible peer
-firmware. sdk-nrf defaults to 32; a build assert catches a mismatch. Set
-`CONFIG_ESB_TX_FIFO_SIZE` to at least twice the peripheral count. Each pipe holds
-up to two ACK replies. sdk-nrf's default of 8 covers four peripherals.
-
-To use the nRF5 SDK 17.1 driver without MPSL, select the module-owned backend and
-provide the SDK root for its support headers:
-```conf
-CONFIG_ZMK_SPLIT_ESB_STANDALONE=y
-CONFIG_ZMK_SPLIT_ESB_NRF5_SDK_PATH="C:/path/to/nRF5_SDK_17.1.0"
-CONFIG_ZMK_SPLIT_ESB_MAX_PAYLOAD=48
-CONFIG_ZMK_SPLIT_ESB_TX_FIFO_SIZE=8
-CONFIG_ESB=n
-```
+The module directly uses the vendored nRF5 SDK 17.1 `nrf_esb` API; it does not
+select or depend on NCS ESB or MPSL. Provide the SDK root for its support headers.
 The SDK's `nrf_esb.c` and headers are copied into `src/standalone_esb/nrf5sdk`
-with their original Nordic license notices. A small Zephyr API/IRQ bridge and
-compatibility headers connect it to the module. This backend uses the SDK's
-fixed RADIO, SWI0, TIMER2, and PPI channels 10-13, so those resources must not
-be used by other drivers.
+with their original Nordic license notices. The driver has fixed TX/RX FIFOs of
+8 entries and uses RADIO, SWI0, TIMER2, and PPI channels 10-13; those resources
+must not be used by other drivers. Set the TX FIFO config to 8, which supports
+up to four peripherals with two queued ACK replies per pipe.
 
 On a central with `CONFIG_ZMK_SPLIT_ESB_HID_RELAY=y`, raise the RX FIFO size
 above the selected driver default (8). Relay polls can overflow it, and a packet
@@ -441,7 +430,7 @@ CONFIG_ZMK_SPLIT_ESB_LOG_LEVEL_DBG=y
 | `pipe N rx` | central | packets heard on pipe N |
 | `data` | central | those neither keepalive nor relay poll |
 | `replies written`, `refused` | central | ACK replies queued, refused with the ACK FIFO full |
-| `tx queue peak` | every | most packets waiting in the TX FIFO at once, of `CONFIG_ESB_TX_FIFO_SIZE`. Central: ACK replies waiting for their pipe's next packet |
+| `tx queue peak` | every | most packets waiting in the TX FIFO at once, of `CONFIG_ZMK_SPLIT_ESB_TX_FIFO_SIZE`. Central: ACK replies waiting for their pipe's next packet |
 | `sent`, `refused` | peripheral | packets queued, refused with the TX FIFO full |
 | `noack` | peripheral | packets sent without ACK |
 | `tx ok` | peripheral | packets done, ACKed or sent without ACK |
@@ -483,9 +472,8 @@ Workspace dependencies pulled by `west.yml`. Each keeps its own license:
 
 The `LicenseRef-Nordic-5-Clause` parts restrict use to Nordic hardware.
 
-The default ESB backend comes from sdk-nrf. The optional nRF5 SDK 17.1 backend
-uses the vendored ESB source above. nrfxlib is still cloned into your workspace
-and gets linked if you also enable BLE.
+The ESB driver is the vendored nRF5 SDK 17.1 source above. nrfxlib is still
+cloned into your workspace and gets linked if you also enable BLE.
 
 Patches under `zephyr/patches/nrf/` modify sdk-nrf files (Nordic-licensed).
 `modules/modules.cmake` applies them at cmake configure. Other Nordic SDK source

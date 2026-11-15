@@ -17,8 +17,6 @@
 #include <zephyr/sys/atomic.h>
 #include <zephyr/sys/util.h>
 
-#include <esb.h>
-
 LOG_MODULE_DECLARE(zmk_split_esb, CONFIG_ZMK_SPLIT_ESB_LOG_LEVEL);
 
 #define PIPE_COUNT DT_CHILD_NUM_STATUS_OKAY(DT_INST_CHILD(0, peripherals))

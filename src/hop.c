@@ -8,8 +8,6 @@
 #include <zephyr/kernel.h>
 #include <zephyr/sys/util.h>
 
-#include <esb.h>
-
 #include "hop.h"
 #include "hop_internal.h"
 #include "hop_policy.h"

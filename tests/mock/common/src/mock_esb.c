@@ -1,7 +1,7 @@
 // Copyright 2026 Roman Kuzmitskii (@damex)
 // SPDX-License-Identifier: MIT
 
-/* Fake NCS ESB driver for both roles. */
+/* Fake ESB radio driver for both roles. */
 
 #include "mock_esb.h"
 
@@ -12,9 +12,6 @@
 #include <zephyr/sys/printk.h>
 #include <zephyr/sys/util.h>
 #include <zephyr/toolchain.h>
-
-BUILD_ASSERT(CONFIG_ZMK_SPLIT_ESB_MAX_PAYLOAD == CONFIG_ESB_MAX_PAYLOAD_LENGTH,
-             "set CONFIG_ESB_MAX_PAYLOAD_LENGTH equal to CONFIG_ZMK_SPLIT_ESB_MAX_PAYLOAD in the case .conf");
 
 /* Room to overflow the module's RX ring in one event. */
 #define RX_FIFO_DEPTH (2 * CONFIG_ZMK_SPLIT_ESB_RX_QUEUE_SIZE)

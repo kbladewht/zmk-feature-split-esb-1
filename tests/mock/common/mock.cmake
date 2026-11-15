@@ -7,6 +7,7 @@ set(esb_root ${CMAKE_CURRENT_LIST_DIR}/../../..)
 set(mock_common ${CMAKE_CURRENT_LIST_DIR})
 
 zephyr_library_named(zmk_feature_split_esb_test)
+zephyr_library_compile_definitions(ZMK_SPLIT_ESB_TEST_MOCK)
 zephyr_library_include_directories(
   ${mock_common}/include
   ${esb_root}/src

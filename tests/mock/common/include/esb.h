@@ -1,7 +1,7 @@
 // Copyright 2026 Roman Kuzmitskii (@damex)
 // SPDX-License-Identifier: MIT
 
-/* Test radio, NCS ESB subset the module calls, signatures as in NCS. */
+/* Test-only radio interface retained for mock helpers. */
 #pragma once
 
 #include <stdbool.h>
@@ -18,7 +18,9 @@
         .retransmit_delay = 600,                                                                   \
         .retransmit_count = 3,                                                                     \
         .tx_mode = ESB_TXMODE_AUTO,                                                                \
-        .c = 32,                                                                                  \
+        .payload_length = 32,                                                                     \
+        .radio_irq_priority = 1,                                                                  \
+        .event_irq_priority = 2,                                                                  \
         .selective_auto_ack = false,                                                               \
         .use_fast_ramp_up = false,                                                                 \
     }
@@ -62,7 +64,7 @@ struct esb_payload {
     int8_t rssi;
     uint8_t noack;
     uint8_t pid;
-    uint8_t data[CONFIG_ESB_MAX_PAYLOAD_LENGTH];
+    uint8_t data[CONFIG_ZMK_SPLIT_ESB_MAX_PAYLOAD];
 };
 
 struct esb_evt {
@@ -83,6 +85,8 @@ struct esb_config {
     uint16_t retransmit_count;
     enum esb_tx_mode tx_mode;
     uint8_t payload_length;
+    uint8_t radio_irq_priority;
+    uint8_t event_irq_priority;
     bool selective_auto_ack;
     bool use_fast_ramp_up;
 };

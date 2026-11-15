@@ -1,7 +1,7 @@
 # Copyright 2026 Roman Kuzmitskii (@damex)
 # SPDX-License-Identifier: MIT
 
-# NCS ESB symbols the module reads, with NCS prompts, defaults and ranges.
+# Legacy-shaped ESB symbols used only by the test radio mock.
 
 menuconfig ESB
     bool "Enhanced ShockBurst"

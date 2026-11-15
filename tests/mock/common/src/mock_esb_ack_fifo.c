@@ -1,7 +1,7 @@
 // Copyright 2026 Roman Kuzmitskii (@damex)
 // SPDX-License-Identifier: MIT
 
-/* Fake NCS ESB PRX ACK FIFO, queued ACK payloads go out and leave as NCS does. */
+/* Fake ESB PRX ACK FIFO with per-pipe queued ACK payloads. */
 
 #include "mock_esb_ack_fifo.h"
 
@@ -15,14 +15,14 @@
 #include "mock_esb.h"
 
 struct pipe_queue {
-    struct esb_payload payloads[CONFIG_ESB_TX_FIFO_SIZE];
+    struct esb_payload payloads[CONFIG_ZMK_SPLIT_ESB_TX_FIFO_SIZE];
     size_t head;
     size_t count;
     size_t peak;
     bool head_sent;
 };
 
-static struct pipe_queue queues[CONFIG_ESB_PIPE_COUNT];
+static struct pipe_queue queues[CONFIG_ZMK_SPLIT_ESB_PIPE_COUNT];
 static size_t slots_used;
 static size_t slots_peak;
 static size_t full_refusals;
@@ -34,10 +34,10 @@ int esb_write_payload(const struct esb_payload *payload) {
     if (payload == NULL) {
         return -EINVAL;
     }
-    if (payload->length == 0 || payload->length > CONFIG_ESB_MAX_PAYLOAD_LENGTH) {
+    if (payload->length == 0 || payload->length > CONFIG_ZMK_SPLIT_ESB_MAX_PAYLOAD) {
         return -EMSGSIZE;
     }
-    if (slots_used >= CONFIG_ESB_TX_FIFO_SIZE) {
+    if (slots_used >= CONFIG_ZMK_SPLIT_ESB_TX_FIFO_SIZE) {
         full_refusals++;
         return -ENOMEM;
     }
@@ -45,7 +45,7 @@ int esb_write_payload(const struct esb_payload *payload) {
         return -EINVAL;
     }
     struct pipe_queue *queue = &queues[payload->pipe];
-    queue->payloads[(queue->head + queue->count) % CONFIG_ESB_TX_FIFO_SIZE] = *payload;
+    queue->payloads[(queue->head + queue->count) % CONFIG_ZMK_SPLIT_ESB_TX_FIFO_SIZE] = *payload;
     queue->count++;
     queue->peak = MAX(queue->peak, queue->count);
     slots_used++;
@@ -57,7 +57,7 @@ static bool answer_with_ack(uint8_t pipe) {
     struct pipe_queue *queue = &queues[pipe];
     bool head_delivered = queue->head_sent;
     if (head_delivered) {
-        queue->head = (queue->head + 1) % CONFIG_ESB_TX_FIFO_SIZE;
+        queue->head = (queue->head + 1) % CONFIG_ZMK_SPLIT_ESB_TX_FIFO_SIZE;
         queue->count--;
         slots_used--;
     }

@@ -84,7 +84,7 @@ static const struct esb_payload *receive(uint8_t pipe,
                                          const uint8_t *data,
                                          size_t length,
                                          bool ack) {
-    mock_check(length <= CONFIG_ESB_MAX_PAYLOAD_LENGTH, "traffic packet fits one ESB payload");
+    mock_check(length <= CONFIG_ZMK_SPLIT_ESB_MAX_PAYLOAD, "traffic packet fits one ESB payload");
     struct esb_payload payload = {.pipe = pipe, .length = (uint8_t)length, .noack = 1};
     if (ack) {
         payload.noack = 0;
@@ -315,7 +315,7 @@ static void traffic_thread_fn(void *unused_a, void *unused_b, void *unused_c) {
     printk("PASS: central ACK FIFO took every write for %u ms, peak %u of %u slots\n",
            (unsigned int)TRAFFIC_RUN_MS,
            (unsigned int)mock_esb_ack_fifo_peak_slots(),
-           (unsigned int)CONFIG_ESB_TX_FIFO_SIZE);
+           (unsigned int)CONFIG_ZMK_SPLIT_ESB_TX_FIFO_SIZE);
     exit(0);
 }
 

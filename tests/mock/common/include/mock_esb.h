@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 /*
- * Fake NCS ESB driver for both roles.
+ * Fake ESB radio driver for both roles.
  * Mock case defines esb_write_payload to observe transmits.
  */
 #pragma once

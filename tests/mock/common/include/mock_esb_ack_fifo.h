@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 /*
- * Fake NCS ESB PRX ACK FIFO: CONFIG_ESB_TX_FIFO_SIZE slots shared by every pipe.
+ * Fake ESB PRX ACK FIFO: CONFIG_ZMK_SPLIT_ESB_TX_FIFO_SIZE slots shared by every pipe.
  * Provides esb_write_payload, a mock case linking it defines none.
  */
 #pragma once

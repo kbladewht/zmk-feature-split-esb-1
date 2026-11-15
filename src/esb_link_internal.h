@@ -6,7 +6,32 @@
 
 #include <stdint.h>
 
-#include <esb.h>
+#include <errno.h>
+
+#include <nrf_error.h>
+#include <nrf_esb.h>
+
+static inline int esb_link_nrf_status_to_errno(uint32_t status) {
+    if ((int32_t)status < 0) {
+        return (int32_t)status;
+    }
+
+    switch (status) {
+    case NRF_SUCCESS:
+        return 0;
+    case NRF_ERROR_BUSY:
+        return -EBUSY;
+    case NRF_ERROR_NO_MEM:
+        return -ENOMEM;
+    case NRF_ERROR_INVALID_LENGTH:
+        return -EMSGSIZE;
+    case NRF_ERROR_NULL:
+    case NRF_ERROR_INVALID_PARAM:
+        return -EINVAL;
+    default:
+        return -EIO;
+    }
+}
 
 
 #define ESB_LINK_PIPE_MAX 8 /* ESB hardware pipe count */

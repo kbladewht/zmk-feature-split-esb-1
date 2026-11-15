@@ -5,11 +5,12 @@
 #define DT_DRV_COMPAT zmk_split_esb
 
 #include <zephyr/kernel.h>
+#include <zephyr/irq.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/spsc_lockfree.h>
 #include <zephyr/sys/util.h>
 
-#include <esb.h>
+#include <nrf_esb.h>
 
 #include "esb_link.h"
 #include "esb_link_internal.h"
@@ -47,12 +48,6 @@ BUILD_ASSERT(PIPE_BIT_SUM == (1u << DT_CHILD_NUM_STATUS_OKAY(ESB_PERIPHERALS)) -
              "peripheral pipes must be exactly 0..N-1, one per peripheral");
 const uint8_t esb_link_pipe_count = (uint8_t)PERIPHERAL_COUNT;
 
-#if !defined(CONFIG_ZMK_SPLIT_ESB_STANDALONE) || !CONFIG_ZMK_SPLIT_ESB_STANDALONE
-BUILD_ASSERT(CONFIG_ZMK_SPLIT_ESB_MAX_PAYLOAD == CONFIG_ESB_MAX_PAYLOAD_LENGTH,
-             "set CONFIG_ESB_MAX_PAYLOAD_LENGTH equal to CONFIG_ZMK_SPLIT_ESB_MAX_PAYLOAD");
-#endif
-
-
 /* RX path: the radio ISR writes each payload straight into a lock-free SPSC ring
  * (no irq_lock, zero-copy slot) and signals the dispatch thread, which hands packets
  * to the role layer in thread context.
@@ -85,14 +80,14 @@ static FUNC_NORETURN void rx_thread_fn(void *unused_a, void *unused_b, void *unu
 }
 
 /* Runs in the ESB IRQ: only move bytes into queues, defer the ZMK handoff. */
-static void on_esb_event(const struct esb_evt *event) {
+static void on_esb_event(nrf_esb_evt_t const *event) {
     switch (event->evt_id) {
-    case ESB_EVENT_RX_RECEIVED: {
+    case NRF_ESB_EVENT_RX_RECEIVED: {
         bool received = false;
         uint8_t pipes_acked = 0;
         uint32_t drained = 0;
-        struct esb_payload payload;
-        while (esb_read_rx_payload(&payload) == 0) {
+        nrf_esb_payload_t payload;
+        while (esb_link_nrf_status_to_errno(nrf_esb_read_rx_payload(&payload)) == 0) {
             drained++;
             LOG_INF("xxxxx received on pipe %d", payload.pipe);
             if (payload.noack == 0) {
@@ -124,14 +119,14 @@ static void on_esb_event(const struct esb_evt *event) {
         esb_link_role_rx_done(pipes_acked);
         break;
     }
-    case ESB_EVENT_TX_SUCCESS:
+    case NRF_ESB_EVENT_TX_SUCCESS:
         /* PRX ACK payload transmission needs no TX completion handling here. */
         break;
-    case ESB_EVENT_TX_FAILED: {
+    case NRF_ESB_EVENT_TX_FAILED: {
         /* Only a flush moves the TX FIFO past a failed head.
          * esb_pop_tx moves the write end instead. */
         LOG_WRN("TX retransmits exhausted, flushing TX FIFO");
-        int flush_error = esb_flush_tx();
+        int flush_error = esb_link_nrf_status_to_errno(nrf_esb_flush_tx());
         if (flush_error) {
             LOG_DBG("esb_flush_tx after TX_FAILED returned %d", flush_error);
         }
@@ -147,30 +142,64 @@ static void on_esb_event(const struct esb_evt *event) {
 
 static __noinline int esb_link_radio_setup(void) {
     LOG_INF("esb_link_radio_setup  33333");
-    int set_error = esb_set_address_length(address_length);
+    int set_error =
+        esb_link_nrf_status_to_errno(nrf_esb_set_address_length(address_length));
     if (set_error) {
         LOG_INF("esb_set_address_length returned %d", set_error);
     }
     LOG_HEXDUMP_INF(base_address_0, sizeof(base_address_0), "addr0");
-    set_error = esb_set_base_address_0(base_address_0);
+    set_error = esb_link_nrf_status_to_errno(nrf_esb_set_base_address_0(base_address_0));
     LOG_INF("esb_set_base_address_0 returned %d", set_error);
     LOG_HEXDUMP_INF(base_address_1, sizeof(base_address_1), "addr1");
-    set_error = esb_set_base_address_1(base_address_1);
+    set_error = esb_link_nrf_status_to_errno(nrf_esb_set_base_address_1(base_address_1));
     LOG_INF("esb_set_base_address_1 returned %d", set_error);
-    set_error = esb_set_prefixes(peripheral_prefixes, (uint8_t)PERIPHERAL_COUNT);
+    set_error = esb_link_nrf_status_to_errno(
+        nrf_esb_set_prefixes(peripheral_prefixes, (uint8_t)PERIPHERAL_COUNT));
     if (set_error) {
         LOG_INF("esb_set_prefixes returned %d", set_error);
     }
-    set_error = esb_set_rf_channel(hop_current_channel());
+    set_error = esb_link_nrf_status_to_errno(nrf_esb_set_rf_channel(hop_current_channel()));
     if (set_error) {
         LOG_DBG("esb_set_rf_channel returned %d", set_error);
     }
-    set_error = esb_set_tx_power(tx_power_dbm);
+    set_error =
+        esb_link_nrf_status_to_errno(nrf_esb_set_tx_power((nrf_esb_tx_power_t)tx_power_dbm));
     if (set_error) {
         LOG_DBG("esb_set_tx_power returned %d", set_error);
     }
     return esb_link_role_start();
 }
+
+#if defined(ZMK_SPLIT_ESB_TEST_MOCK)
+static int connect_irq_handlers(void) {
+    return 0;
+}
+#else
+extern void RADIO_IRQHandler(void);
+extern void ESB_EVT_IRQHandler(void);
+
+static void radio_irq_wrapper(const void *arg) {
+    ARG_UNUSED(arg);
+    RADIO_IRQHandler();
+}
+
+static void esb_event_irq_wrapper(const void *arg) {
+    ARG_UNUSED(arg);
+    ESB_EVT_IRQHandler();
+}
+
+static int connect_irq_handlers(void) {
+    int error = irq_connect_dynamic(RADIO_IRQn, CONFIG_ZMK_SPLIT_ESB_RADIO_IRQ_PRIORITY,
+                                    radio_irq_wrapper, NULL, 0);
+    if (error < 0) {
+        return error;
+    }
+
+    error = irq_connect_dynamic(ESB_EVT_IRQ, CONFIG_ZMK_SPLIT_ESB_EVENT_IRQ_PRIORITY,
+                                esb_event_irq_wrapper, NULL, 0);
+    return error < 0 ? error : 0;
+}
+#endif
 
 int esb_link_init(esb_link_rx_callback_t callback) {
     rx_callback = callback;
@@ -184,26 +213,32 @@ int esb_link_init(esb_link_rx_callback_t callback) {
         return error;
     }
 
-    struct esb_config config = ESB_DEFAULT_CONFIG;
-    config.protocol = ESB_PROTOCOL_ESB_DPL;
-    config.mode = ESB_MODE_PRX;
+    nrf_esb_config_t config = NRF_ESB_DEFAULT_CONFIG;
+    config.protocol = NRF_ESB_PROTOCOL_ESB_DPL;
+    config.mode = NRF_ESB_MODE_PRX;
     config.event_handler = on_esb_event;
-    config.bitrate = ESB_BITRATE_1MBPS;
-    config.crc = ESB_CRC_16BIT;
+    config.bitrate = NRF_ESB_BITRATE_1MBPS;
+    config.crc = NRF_ESB_CRC_16BIT;
     config.retransmit_count = 2;
     config.payload_length = 0;
     config.retransmit_delay = 250;
+    config.radio_irq_priority = CONFIG_ZMK_SPLIT_ESB_RADIO_IRQ_PRIORITY;
+    config.event_irq_priority = CONFIG_ZMK_SPLIT_ESB_EVENT_IRQ_PRIORITY;
     /* Reverse channel replies ride on ACKs requested by peripherals. */
     config.selective_auto_ack = false;
-    // config.tx_mode = ESB_TXMODE_AUTO;
-    config.use_fast_ramp_up = false;
 
-    error = esb_init(&config);
+    error = connect_irq_handlers();
     if (error) {
-        LOG_ERR("esb_init failed (%d)", error);
+        LOG_ERR("ESB IRQ connection failed (%d)", error);
         return error;
     }
-    esb_set_rf_channel(26);
+
+    error = esb_link_nrf_status_to_errno(nrf_esb_init(&config));
+    if (error) {
+        LOG_ERR("nrf_esb_init failed (%d)", error);
+        return error;
+    }
+    (void)nrf_esb_set_rf_channel(26);
     LOG_INF("ESB esb_link_radio_setup  11111");
     error = esb_link_radio_setup();
     LOG_INF("esb_link_radio_setup  22222");
@@ -224,11 +259,11 @@ int esb_link_set_enabled(bool enabled) {
     }
     if (!enabled) {
         hop_stop();
-        int stop_error = esb_stop_rx();
+        int stop_error = esb_link_nrf_status_to_errno(nrf_esb_stop_rx());
         if (stop_error) {
             LOG_DBG("esb_stop_rx returned %d", stop_error);
         }
-        int flush_error = esb_flush_tx();
+        int flush_error = esb_link_nrf_status_to_errno(nrf_esb_flush_tx());
         if (flush_error) {
             LOG_DBG("esb_flush_tx returned %d", flush_error);
         }
