@@ -59,11 +59,9 @@ Shared (`esb_shared.dtsi`), every device:
 / {
     esb_link {
         compatible = "zmk,split-esb";
-        base-address = [E7 D3 9A 5C];
         peripherals {
             mouse: peripheral_mouse {
                 pipe = <0>;
-                prefix = <0x4B>;
                 weight = <1>;
             };
         };
@@ -109,16 +107,13 @@ Shared (`esb_shared.dtsi`):
 / {
     esb_link {
         compatible = "zmk,split-esb";
-        base-address = [E7 D3 9A 5C];
         peripherals {
             left: peripheral_left {
                 pipe = <0>;
-                prefix = <0x4B>;
                 weight = <1>;
             };
             right: peripheral_right {
                 pipe = <1>;
-                prefix = <0xC3>;
                 weight = <1>;
             };
         };
@@ -145,9 +140,8 @@ no HID-indicator forwarding.
 
 | DT property | Value |
 |---|---|
-| `base-address` | 4-byte bytestring `[..]`, shared across pipes, vary bytes (all-same-byte syncs poorly) |
 | `address-length` | on-air address bytes 3/4/5, shorter trims airtime, weakens selectivity, all devices must match (default 5) |
-| `peripherals` | one child node per peripheral: `pipe`, `prefix` (1 byte), `weight`, `reply-queue-depth` (central reverse-channel backlog for this pipe, default 8) |
+| `peripherals` | one child node per peripheral: `pipe`, `weight`, `reply-queue-depth` (central reverse-channel backlog for this pipe, default 8) |
 | `hop-channels` | channel bytestring, each 0-100 (2400 + N MHz). 1 = fixed, 2+ = hopping set |
 | `hop-anchors` | unmaskable rendezvous set, a subset of hop-channels (default 76, 79, 82). Pick channels clear of local WiFi |
 | `hop-threshold` | graded loss before acting: central hop-vote sum, peripheral sweep streak; fully-lost window scores 4 (default 6) |
@@ -162,6 +156,10 @@ no HID-indicator forwarding.
 | `crc-bits` | CRC width 0/8/16, all peripherals must match the central (default 16) |
 | `bitrate-kbps` | radio bitrate 1000/2000, all peripherals must match the central (default 2000) |
 | `lossy-codes` | optional list of `<INPUT_EV_* code>` pairs sent without ACK |
+
+ESB addresses are hardcoded in the driver and shared by central and peripherals: base
+addresses `E7 E7 E7 E7` and `C2 C2 C2 C2`, with pipe prefixes `E7`, `C2`, and `C3`
+for pipes 0, 1, and 2. At most three pipes are supported by this address mapping.
 
 Lossy-codes lists the input axes peripherals fire-and-forget. Reserve for
 high-rate, self-correcting axes (pointer motion). Non-input split events

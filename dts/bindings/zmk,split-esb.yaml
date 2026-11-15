@@ -11,18 +11,16 @@ compatible: "zmk,split-esb"
 properties:
   base-address:
     type: uint8-array
-    required: true
     description: |
-      4-byte ESB base address, shared across pipes. Vary bytes.
-      All-same-byte on-air address (base plus matching prefix) syncs poorly.
+      Legacy property retained for compatibility; the ESB base addresses are hardcoded
+      by the driver and this value is ignored.
   address-length:
     type: int
     default: 5
     enum: [3, 4, 5]
     description: |
       On-air address bytes (1 prefix plus base). 5 is standard ESB. Shorter trims a
-      byte per packet but weakens address selectivity. Uses the high base-address
-      bytes. All peripherals must match the central.
+      byte per packet but weakens address selectivity. All peripherals must match the central.
   hop-channels:
     type: uint8-array
     description: |
@@ -144,8 +142,9 @@ child-binding:
         description: ESB pipe index, also the ZMK source id.
       prefix:
         type: int
-        required: true
-        description: 1-byte address prefix, distinct per pipe.
+        description: |
+          Legacy property retained for compatibility; the driver's hardcoded prefix for
+          this pipe is used instead (0xE7, 0xC2, then 0xC3 for pipes 0, 1, and 2).
       weight:
         type: int
         default: 1
