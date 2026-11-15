@@ -76,11 +76,6 @@ initialized.
 |                   relay dongle: relay_poll_work due in its poll period       |
 |      |                                                                       |
 |      v                                                                       |
-|  [esb_config_init]                           esb_config.c                    |
-|  settings_load_subtree("esb") applies saved                                  |
-|  tx_power / retransmit count + delay live                                    |
-|      |                                                                       |
-|      v                                                                       |
 |  [first keepalive tick]                                                      |
 |  polls the central on the resumed channel                                    |
 +------------------------------------------------------------------------------+
