@@ -122,12 +122,12 @@ static void on_esb_event(nrf_esb_evt_t const *event) {
     }
 }
 typedef void (*esb_handler_t)(nrf_esb_payload_t payload);
-static void radio_rx_start(esb_handler_t handler)
+static int radio_rx_start(esb_handler_t handler)
 {
     ARG_UNUSED(handler);
     // m_handler_n = handler;
     uint32_t err_code = nrf_esb_start_rx();
-    APP_ERROR_CHECK(err_code);
+    return esb_link_nrf_status_to_errno(err_code);
 }
 static void esb_rx_data_cb(nrf_esb_payload_t payload)
 {
@@ -177,6 +177,9 @@ uint8_t base_addr_0[4] = { 0xE7, 0xE7, 0xE7, 0xE7 };
   
     LOG_INF("esb_link_radio_setup  22222 %d", err_code);
 
-   radio_rx_start(esb_rx_data_cb);
+   int start_error = radio_rx_start(esb_rx_data_cb);
+   if (start_error) {
+       return start_error;
+   }
     return 0;
 }
