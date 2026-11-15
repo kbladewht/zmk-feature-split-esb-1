@@ -39,8 +39,7 @@ CONFIG_ZMK_SPLIT_BLE=n
 CONFIG_ZMK_SPLIT_WIRED=n
 CONFIG_ZMK_SPLIT_ESB=y
 CONFIG_ZMK_SPLIT_ESB_MAX_PAYLOAD=48
-CONFIG_ZMK_SPLIT_ESB_NRF5_SDK_PATH="C:/path/to/nRF5_SDK_17.1.0"
-CONFIG_ESB=n
+CONFIG_ESB_MAX_PAYLOAD_LENGTH=48
 ```
 The module supports the central role only; peripheral endpoints require a separate
 compatible implementation. Set `CONFIG_ZMK_SPLIT_ROLE_CENTRAL=y` on the central.
@@ -50,13 +49,16 @@ For applications that initialize Vial after USB enumeration, set
 Vial initialization has completed. This keeps radio setup and the boot channel
 survey from running before Vial is ready.
 
-The module directly uses the vendored nRF5 SDK 17.1 `nrf_esb` API; it does not
-select or depend on NCS ESB or MPSL. Provide the SDK root for its support headers.
-The SDK's `nrf_esb.c` and headers are copied into `src/standalone_esb/nrf5sdk`
-with their original Nordic license notices. The driver has fixed TX/RX FIFOs of
-8 entries and uses RADIO, SWI0, TIMER2, and PPI channels 10-13; those resources
-must not be used by other drivers. Set the TX FIFO config to 8, which supports
-up to four peripherals with two queued ACK replies per pipe.
+The module uses the NCS ESB implementation. Enabling `CONFIG_ZMK_SPLIT_ESB`
+selects ESB; NCS adds `nrf/subsys/esb/esb.c` to the build. For a standalone ESB
+link, keep `CONFIG_ESB_DYNAMIC_INTERRUPTS=n`: this uses ESB's static direct IRQs
+and lets NCS select MPSL FEM-only support instead of initializing the full MPSL
+radio handlers. MPSL reserves the RADIO, TIMER, and related interrupt handlers
+while enabled, so they must not be dynamically replaced. Set
+`CONFIG_ESB_MAX_PAYLOAD_LENGTH` to at least
+`CONFIG_ZMK_SPLIT_ESB_MAX_PAYLOAD`. ESB selects its timer/PPI resources through
+NCS. Set the TX FIFO config to 8, which supports up to four peripherals with
+two queued ACK replies per pipe.
 
 On a central with `CONFIG_ZMK_SPLIT_ESB_HID_RELAY=y`, raise the RX FIFO size
 above the selected driver default (8). Relay polls can overflow it, and a packet
@@ -472,13 +474,16 @@ Workspace dependencies pulled by `west.yml`. Each keeps its own license:
 | ZMK | MIT |
 | Zephyr | Apache-2.0 |
 | sdk-nrf | LicenseRef-Nordic-5-Clause |
-| nRF5 SDK 17.1 ESB source under `src/standalone_esb/nrf5sdk/` | LicenseRef-Nordic-5-Clause |
+| NCS ESB source | LicenseRef-Nordic-5-Clause |
+| Retained nRF5 SDK 17.1 ESB snapshot under `src/standalone_esb/nrf5sdk/` (not built) | LicenseRef-Nordic-5-Clause |
 | nrfxlib | LicenseRef-Nordic-5-Clause (parts this module's builds touch: MPSL, softdevice_controller) |
 
 The `LicenseRef-Nordic-5-Clause` parts restrict use to Nordic hardware.
 
-The ESB driver is the vendored nRF5 SDK 17.1 source above. nrfxlib is still
-cloned into your workspace and gets linked if you also enable BLE.
+The ESB driver is the NCS source above. The legacy nRF5 SDK snapshot is retained
+in the repository but is no longer compiled. nrfxlib is cloned into your
+workspace and supplies MPSL for ESB (and the SoftDevice Controller if BLE is
+enabled).
 
 Patches under `zephyr/patches/nrf/` modify sdk-nrf files (Nordic-licensed).
 `modules/modules.cmake` applies them at cmake configure. Other Nordic SDK source

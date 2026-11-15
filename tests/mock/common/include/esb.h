@@ -19,8 +19,6 @@
         .retransmit_count = 3,                                                                     \
         .tx_mode = ESB_TXMODE_AUTO,                                                                \
         .payload_length = 32,                                                                     \
-        .radio_irq_priority = 1,                                                                  \
-        .event_irq_priority = 2,                                                                  \
         .selective_auto_ack = false,                                                               \
         .use_fast_ramp_up = false,                                                                 \
     }
@@ -64,7 +62,7 @@ struct esb_payload {
     int8_t rssi;
     uint8_t noack;
     uint8_t pid;
-    uint8_t data[CONFIG_ZMK_SPLIT_ESB_MAX_PAYLOAD];
+    uint8_t data[CONFIG_ESB_MAX_PAYLOAD_LENGTH];
 };
 
 struct esb_evt {
@@ -85,13 +83,12 @@ struct esb_config {
     uint16_t retransmit_count;
     enum esb_tx_mode tx_mode;
     uint8_t payload_length;
-    uint8_t radio_irq_priority;
-    uint8_t event_irq_priority;
     bool selective_auto_ack;
     bool use_fast_ramp_up;
 };
 
 int esb_init(const struct esb_config *config);
+void esb_disable(void);
 bool esb_is_idle(void);
 int esb_write_payload(const struct esb_payload *payload);
 int esb_read_rx_payload(struct esb_payload *payload);

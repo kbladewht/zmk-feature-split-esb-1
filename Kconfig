@@ -4,19 +4,13 @@
 menuconfig ZMK_SPLIT_ESB
     bool "ZMK ESB split transport"
     depends on ZMK_SPLIT && ZMK_SPLIT_ROLE_CENTRAL
-    select DYNAMIC_INTERRUPTS
-    select DYNAMIC_DIRECT_INTERRUPTS
+    select ESB
     help
       Central-side Enhanced ShockBurst (2.4 GHz) split transport for one or more
       peripherals. One ESB packet carries one complete split message.
       ESB hardware ACK, retransmit and CRC provide reliability.
 
 if ZMK_SPLIT_ESB
-
-config ZMK_SPLIT_ESB_NRF5_SDK_PATH
-    string "nRF5 SDK 17.1 root directory"
-    help
-      Path to the nRF5 SDK 17.1.0 directory containing components/proprietary_rf/esb.
 
 config ZMK_SPLIT_ESB_INIT_AFTER_VIAL
     bool "Start the ESB radio after Vial initialization"
@@ -45,14 +39,6 @@ config ZMK_SPLIT_ESB_PIPE_COUNT
     int
     default 8
     range 1 8
-
-config ZMK_SPLIT_ESB_RADIO_IRQ_PRIORITY
-    int
-    default 1
-
-config ZMK_SPLIT_ESB_EVENT_IRQ_PRIORITY
-    int
-    default 2
 
 config ZMK_SPLIT_ESB_RX_QUEUE_SIZE
     int "Received-packet ring depth (power of 2)"

@@ -15,6 +15,8 @@
 #include <zephyr/sys/__assert.h>
 #include <zephyr/sys/util.h>
 
+#include <esb.h>
+
 #include "esb_hid_relay_pointer.h"
 #include "esb_link.h"
 #include "esb_link_internal.h"
@@ -173,11 +175,11 @@ int esb_link_latch_idle_reply(uint8_t pipe, const uint8_t *data, size_t length) 
 }
 
 int esb_link_role_start(void) {
-    return esb_link_nrf_status_to_errno(nrf_esb_start_rx());
+    return esb_start_rx();
 }
 
-static int write_reply(const nrf_esb_payload_t *payload) {
-    int error = esb_link_nrf_status_to_errno(nrf_esb_write_payload(payload));
+static int write_reply(const struct esb_payload *payload) {
+    int error = esb_write_payload(payload);
     if (error != 0) {
         esb_stat_add(ESB_STAT_REPLY_REFUSED, 1);
         return error;
@@ -193,7 +195,7 @@ static bool write_pending_control(uint8_t pipe) {
         if (slot == NULL) {
             continue;
         }
-        nrf_esb_payload_t payload = {0};
+        struct esb_payload payload = {0};
         payload.pipe = pipe;
         payload.length = slot->length;
         memcpy(payload.data, slot->data, slot->length);
@@ -205,7 +207,7 @@ static bool write_pending_control(uint8_t pipe) {
     return false;
 }
 
-static size_t append_pointer(uint8_t pipe, nrf_esb_payload_t *payload, bool changes_queued) {
+static size_t append_pointer(uint8_t pipe, struct esb_payload *payload, bool changes_queued) {
     if (!esb_link_pipe_is_relay(pipe)) {
         return 0;
     }
@@ -216,7 +218,7 @@ static size_t append_pointer(uint8_t pipe, nrf_esb_payload_t *payload, bool chan
     return length;
 }
 
-static void commit_pointer(const nrf_esb_payload_t *payload, size_t offset, bool has_pointer) {
+static void commit_pointer(const struct esb_payload *payload, size_t offset, bool has_pointer) {
     if (has_pointer) {
         esb_hid_relay_pointer_sent(&payload->data[offset]);
     }
@@ -235,7 +237,7 @@ static size_t queued_room(uint8_t pipe) {
     return CONFIG_ZMK_SPLIT_ESB_MAX_PAYLOAD - ESB_HID_RELAY_POINTER_LENGTH;
 }
 
-static struct packed_replies pack_queued_replies(uint8_t pipe, nrf_esb_payload_t *payload) {
+static struct packed_replies pack_queued_replies(uint8_t pipe, struct esb_payload *payload) {
     struct packed_replies packed = {0};
     size_t room = queued_room(pipe);
     struct esb_link_packet packet;
@@ -260,7 +262,7 @@ static struct packed_replies pack_queued_replies(uint8_t pipe, nrf_esb_payload_t
 }
 
 static bool write_queued_replies(uint8_t pipe) {
-    nrf_esb_payload_t payload = {0};
+    struct esb_payload payload = {0};
     payload.pipe = pipe;
     struct packed_replies packed = pack_queued_replies(pipe, &payload);
     if (packed.taken == 0) {
@@ -291,7 +293,7 @@ static struct idle_reply *fresh_idle_reply(uint8_t pipe) {
 }
 
 static void write_idle_reply(uint8_t pipe) {
-    nrf_esb_payload_t payload = {0};
+    struct esb_payload payload = {0};
     payload.pipe = pipe;
     struct idle_reply *slot = fresh_idle_reply(pipe);
     if (slot != NULL) {
