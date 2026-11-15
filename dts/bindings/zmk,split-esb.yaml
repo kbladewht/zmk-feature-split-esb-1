@@ -2,27 +2,13 @@
 # SPDX-License-Identifier: MIT
 
 description: |
-  Shared ESB link identity for a ZMK ESB split.
-  The central and every peripheral must declare identical values to pair.
+  Shared ESB link configuration for a ZMK ESB split.
+  The central and every peripheral must use identical hard-coded radio settings to pair.
   Place this node in a dtsi included by the central and every peripheral.
 
 compatible: "zmk,split-esb"
 
 properties:
-  base-address:
-    type: uint8-array
-    required: true
-    description: |
-      4-byte ESB base address, shared across pipes. Vary bytes.
-      All-same-byte on-air address (base plus matching prefix) syncs poorly.
-  address-length:
-    type: int
-    default: 5
-    enum: [3, 4, 5]
-    description: |
-      On-air address bytes (1 prefix plus base). 5 is standard ESB. Shorter trims a
-      byte per packet but weakens address selectivity. Uses the high base-address
-      bytes. All peripherals must match the central.
   hop-channels:
     type: uint8-array
     description: |
@@ -94,34 +80,6 @@ properties:
       Central declares a peripheral silent for this long stale and releases its held
       state (keys, input-split buttons), the connectionless equivalent of a disconnect.
       A keepalive from the returning peripheral re-syncs anything still held.
-  tx-power-dbm:
-    type: int
-    default: 0
-    description: Boot TX output power, dBm. Radio rounds to nearest supported level.
-  retransmit-count:
-    type: int
-    default: 3
-    description: Hardware retransmit attempts before an unacked packet is dropped.
-  retransmit-delay-us:
-    type: int
-    default: 600
-    description: Delay between retransmits, microseconds.
-  use-fast-ramp-up:
-    type: boolean
-    description: |
-      Shorter radio TX/RX ramp-up delay.
-      nRF52/nRF53 only.
-      All peripherals must match the central.
-  crc-bits:
-    type: int
-    default: 16
-    enum: [0, 8, 16]
-    description: CRC width in bits (0 disables CRC). All peripherals must match the central.
-  bitrate-kbps:
-    type: int
-    default: 2000
-    enum: [1000, 2000]
-    description: Radio bitrate in kbps. All peripherals must match the central.
   lossy-codes:
     type: array
     description: |

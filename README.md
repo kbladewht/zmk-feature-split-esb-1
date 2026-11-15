@@ -47,8 +47,11 @@ it explicitly on every device. Build assert catches value too small for largest
 split message.
 
 DT side: shared dtsi every device includes, plus role-specific lines. Everything
-reports to the dongle (central). Two examples, by peripheral count and what each
-sources.
+reports to the dongle (central). Radio identity and PHY/retry settings are
+hard-coded in `src/esb_link.c`; edit them there and keep them identical on the
+central and every peripheral. Defaults: base address `E7 D3 9A 5C`, address
+length 5, TX power 0 dBm, 3 retransmissions at 600 us, fast ramp-up off, CRC-16,
+and 2 Mbps. Two examples, by peripheral count and what each sources.
 
 ### One peripheral: a mouse
 
@@ -59,7 +62,6 @@ Shared (`esb_shared.dtsi`), every device:
 / {
     esb_link {
         compatible = "zmk,split-esb";
-        base-address = [E7 D3 9A 5C];
         peripherals {
             mouse: peripheral_mouse {
                 pipe = <0>;
@@ -109,7 +111,6 @@ Shared (`esb_shared.dtsi`):
 / {
     esb_link {
         compatible = "zmk,split-esb";
-        base-address = [E7 D3 9A 5C];
         peripherals {
             left: peripheral_left {
                 pipe = <0>;
@@ -145,8 +146,6 @@ no HID-indicator forwarding.
 
 | DT property | Value |
 |---|---|
-| `base-address` | 4-byte bytestring `[..]`, shared across pipes, vary bytes (all-same-byte syncs poorly) |
-| `address-length` | on-air address bytes 3/4/5, shorter trims airtime, weakens selectivity, all devices must match (default 5) |
 | `peripherals` | one child node per peripheral: `pipe`, `prefix` (1 byte), `weight`, `reply-queue-depth` (central reverse-channel backlog for this pipe, default 8) |
 | `hop-channels` | channel bytestring, each 0-100 (2400 + N MHz). 1 = fixed, 2+ = hopping set |
 | `hop-anchors` | unmaskable rendezvous set, a subset of hop-channels (default 76, 79, 82). Pick channels clear of local WiFi |
@@ -155,12 +154,6 @@ no HID-indicator forwarding.
 | `rssi-floor-dbm` | central counts a served peripheral's motion weaker than this (dBm) as a degraded window (default -85) |
 | `idle-keepalive-ms` | peripheral idle keepalive period, also central hop-decision window (default 128) |
 | `peripheral-timeout-ms` | silence before the central releases a peripheral's held state (default 3000) |
-| `tx-power-dbm` | boot TX power in dBm, raise for range (default 0) |
-| `retransmit-count` | retransmits before drop (default 3) |
-| `retransmit-delay-us` | delay between retransmits (default 600) |
-| `use-fast-ramp-up` | shorter radio ramp-up, nRF52/nRF53, all peripherals must match the central |
-| `crc-bits` | CRC width 0/8/16, all peripherals must match the central (default 16) |
-| `bitrate-kbps` | radio bitrate 1000/2000, all peripherals must match the central (default 2000) |
 | `lossy-codes` | optional list of `<INPUT_EV_* code>` pairs sent without ACK |
 
 Lossy-codes lists the input axes peripherals fire-and-forget. Reserve for
@@ -193,7 +186,7 @@ Tunables (Kconfig, defaults shown):
 
 Split events are deltas, the keepalive is the state: each peripheral keepalive
 carries a snapshot of its live state (activity, pressed-position bitmap, battery
-level). Events are ACK'd, but the radio gives up after `retransmit-count` tries,
+level). Events are ACK'd, but the radio gives up after 3 retransmission attempts,
 so a delta can still die in a bad-RF moment. The central reconciles its view
 against every snapshot and replays what was lost.
 

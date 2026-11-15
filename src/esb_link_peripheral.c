@@ -36,8 +36,7 @@ static const uint8_t self_pipe = DT_PROP(DT_CHOSEN(zmk_esb_self), pipe);
 #define TX_STALL_MARGIN 4
 #define TX_STALL_FLOOR_MS 100
 #define TX_STALL_TIMEOUT_MS                                                                        \
-    MAX(TX_STALL_FLOOR_MS, (TX_STALL_MARGIN * DT_INST_PROP(0, retransmit_count) *                  \
-                            DT_INST_PROP(0, retransmit_delay_us)) /                                \
+    MAX(TX_STALL_FLOOR_MS, (TX_STALL_MARGIN * 3 * 600) /                                           \
                                USEC_PER_MSEC)
 
 /* esb_write_payload checks FIFO space before its internal irq_lock, so two

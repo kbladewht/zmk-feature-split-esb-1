@@ -28,16 +28,11 @@
 LOG_MODULE_REGISTER(zmk_split_esb, CONFIG_ZMK_SPLIT_ESB_LOG_LEVEL);
 
 BUILD_ASSERT(DT_HAS_COMPAT_STATUS_OKAY(zmk_split_esb),
-             "a zmk,split-esb node (base-address/peripherals/hop-channels) is required");
+             "a zmk,split-esb node is required");
 
-static const uint8_t base_address[] = DT_INST_PROP(0, base_address);
-static const uint8_t address_length = DT_INST_PROP(0, address_length);
-static const int8_t tx_power_dbm = DT_INST_PROP(0, tx_power_dbm);
-static const uint16_t retransmit_count = DT_INST_PROP(0, retransmit_count);
-static const uint16_t retransmit_delay_us = DT_INST_PROP(0, retransmit_delay_us);
-static const bool use_fast_ramp_up = DT_INST_PROP(0, use_fast_ramp_up);
-static const uint8_t crc_bits = DT_INST_PROP(0, crc_bits);
-static const uint16_t bitrate_kbps = DT_INST_PROP(0, bitrate_kbps);
+static const uint8_t base_address[] = {0xE7, 0xD3, 0x9A, 0x5C};
+static const uint8_t address_length = 5;
+static const int8_t tx_power_dbm = 0;
 BUILD_ASSERT(sizeof(base_address) == 4, "base-address must be exactly 4 bytes");
 
 #define ESB_PERIPHERALS DT_INST_CHILD(0, peripherals)
@@ -48,30 +43,6 @@ static const uint8_t peripheral_prefixes[] = {
 #define PERIPHERAL_COUNT ARRAY_SIZE(peripheral_prefixes)
 BUILD_ASSERT(PERIPHERAL_COUNT >= 1, "peripherals needs at least one entry");
 const uint8_t esb_link_pipe_count = (uint8_t)PERIPHERAL_COUNT;
-
-static enum esb_crc esb_crc_from_bits(uint8_t bits) {
-    switch (bits) {
-    case 0:
-        return ESB_CRC_OFF;
-    case 8:
-        return ESB_CRC_8BIT;
-    case 16:
-        return ESB_CRC_16BIT;
-    default:
-        return ESB_CRC_16BIT;
-    }
-}
-
-static enum esb_bitrate esb_bitrate_from_kbps(uint16_t kbps) {
-    switch (kbps) {
-    case 1000:
-        return ESB_BITRATE_1MBPS;
-    case 2000:
-        return ESB_BITRATE_2MBPS;
-    default:
-        return ESB_BITRATE_2MBPS;
-    }
-}
 
 /* NCS's CONFIG_ESB_MAX_PAYLOAD_LENGTH default (32) wins over ours on Kconfig parse order.
  * Raise it in your .conf or the radio rejects oversized payloads. */
@@ -110,6 +81,7 @@ static FUNC_NORETURN void rx_thread_fn(void *unused_a, void *unused_b, void *unu
         k_sem_take(&rx_sem, K_FOREVER);
         struct esb_link_packet *packet;
         while ((packet = spsc_consume(&rx_spsc)) != NULL) {
+            LOG_INF("88888 RX pipe=%u len=%u", packet->pipe, packet->length);
             if (rx_callback != NULL) {
                 rx_callback(packet->pipe, packet->data, packet->length);
             }
@@ -124,9 +96,10 @@ static void on_esb_event(const struct esb_evt *event) {
     case ESB_EVENT_RX_RECEIVED: {
         bool received = false;
         struct esb_payload payload;
-        // LOG_INF("333333333");
+        LOG_INF("333333333");
         //目前这里是rx专用的,因为开启了start rx主机这里,这个事件才触发
         while (esb_read_rx_payload(&payload) == 0) {
+            LOG_DBG("xxxxxxxxx");
             if (hop_consume_rx(payload.pipe, payload.data, payload.length, payload.rssi)) {
                 continue; /* control packet (keepalive or beacon), not queued */
             }
@@ -261,15 +234,15 @@ int esb_link_init(esb_link_rx_callback_t callback) {
     config.protocol = ESB_PROTOCOL_ESB_DPL;
     config.mode = ESB_LINK_ROLE_MODE;
     config.event_handler = on_esb_event;
-    config.bitrate = esb_bitrate_from_kbps(bitrate_kbps);
-    config.crc = esb_crc_from_bits(crc_bits);
-    config.retransmit_count = retransmit_count;
-    config.retransmit_delay = retransmit_delay_us;
+    config.bitrate = ESB_BITRATE_2MBPS;
+    config.crc = ESB_CRC_16BIT;
+    config.retransmit_count = 3;
+    config.retransmit_delay = 600;
     /* Per-packet ACK is controlled by event_wants_ack() in peripheral.c.
      * The reverse channel rides the ACKs that the peripheral does request. */
     config.selective_auto_ack = true;
     config.tx_mode = ESB_TXMODE_AUTO;
-    config.use_fast_ramp_up = use_fast_ramp_up;
+    config.use_fast_ramp_up = false;
 
     error = esb_init(&config);
     if (error) {
