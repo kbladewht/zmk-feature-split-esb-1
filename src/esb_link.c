@@ -39,10 +39,11 @@ BUILD_ASSERT(sizeof(base_address_1) == 4, "base-address-1 must be exactly 4 byte
 #define ESB_PERIPHERALS DT_INST_CHILD(0, peripherals)
 #define ADDR_PREFIX_ESB_QF {0xE7, 0xC2}
 static const uint8_t peripheral_prefixes[] = ADDR_PREFIX_ESB_QF;
-#define PERIPHERAL_COUNT DT_CHILD_NUM_STATUS_OKAY(ESB_PERIPHERALS)
-BUILD_ASSERT(PERIPHERAL_COUNT >= 1, "peripherals needs at least one entry");
-BUILD_ASSERT(PERIPHERAL_COUNT <= ARRAY_SIZE(peripheral_prefixes),
-             "hard-coded ESB prefixes support at most two peripherals");
+#define PERIPHERAL_COUNT 2
+BUILD_ASSERT(PERIPHERAL_COUNT == ARRAY_SIZE(peripheral_prefixes),
+             "PERIPHERAL_COUNT must match the hard-coded prefixes");
+BUILD_ASSERT(DT_CHILD_NUM_STATUS_OKAY(ESB_PERIPHERALS) == PERIPHERAL_COUNT,
+             "hard-coded ESB configuration requires exactly two peripherals");
 const uint8_t esb_link_pipe_count = (uint8_t)PERIPHERAL_COUNT;
 
 /* NCS's CONFIG_ESB_MAX_PAYLOAD_LENGTH default (32) wins over ours on Kconfig parse order.
@@ -132,7 +133,7 @@ static void on_esb_event(const struct esb_evt *event) {
         // 此时可以读取对端在ACK中返回的数据
         #ifndef CONFIG_ZMK_SPLIT_ROLE_CENTRAL  // ✅ 正确，不加括号
             struct esb_payload ack_rx;
-            // LOG_INF("TX111 ACK received: "  );
+            LOG_INF("TX111 ACK received: "  );
             while (esb_read_rx_payload(&ack_rx) == 0) {
                 // ack_rx.data 包含了对端在ACK中发回的数据
                 // 这就是"反向通道"收到的数据
@@ -150,7 +151,7 @@ static void on_esb_event(const struct esb_evt *event) {
     case ESB_EVENT_TX_FAILED: {
         esb_link_mark_tx_event();
         /* Retransmits exhausted: drop the packet, flush so the TX FIFO can advance. */
-        // LOG_WRN("TX retransmits exhausted, flushing TX FIFO");
+        LOG_WRN("TX retransmits exhausted, flushing TX FIFO");
         int flush_error = esb_flush_tx();
         if (flush_error) {
             LOG_DBG("esb_flush_tx after TX_FAILED returned %d", flush_error);
@@ -186,7 +187,7 @@ static int esb_link_radio_setup(void) {
             base_address_0[0], base_address_0[1], base_address_0[2], base_address_0[3]);
     LOG_INF("base_address_1: %02X %02X %02X %02X",
             base_address_1[0], base_address_1[1], base_address_1[2], base_address_1[3]);
-    int set_error = esb_set_address_length(address_length);
+    int set_error = esb_set_address_length(5);
     if (set_error) {
         LOG_DBG("esb_set_address_length returned %d", set_error);
     }
@@ -198,11 +199,11 @@ static int esb_link_radio_setup(void) {
     if (set_error) {
         LOG_DBG("esb_set_base_address_1 returned %d", set_error);
     }
-    set_error = esb_set_prefixes(peripheral_prefixes, (uint8_t)PERIPHERAL_COUNT);
+    set_error = esb_set_prefixes(peripheral_prefixes, 2);
     if (set_error) {
         LOG_DBG("esb_set_prefixes returned %d", set_error);
     }
-    set_error = esb_set_rf_channel(hop_current_channel());
+    set_error = esb_set_rf_channel(26);
     if (set_error) {
         LOG_DBG("esb_set_rf_channel returned %d", set_error);
     }
@@ -234,10 +235,11 @@ int esb_link_init(esb_link_rx_callback_t callback) {
     config.crc = ESB_CRC_16BIT;
     config.retransmit_count = 3;
     config.retransmit_delay = 600;
+    config.payload_length = 8;
     /* Per-packet ACK is controlled by event_wants_ack() in peripheral.c.
      * The reverse channel rides the ACKs that the peripheral does request. */
-    config.selective_auto_ack = true;
-    config.tx_mode = ESB_TXMODE_AUTO;
+    config.selective_auto_ack = false;
+    config.tx_mode = ESB_TXMODE_MANUAL;
     config.use_fast_ramp_up = false;
 
     error = esb_init(&config);
@@ -250,7 +252,10 @@ int esb_link_init(esb_link_rx_callback_t callback) {
     if (error) {
         return error;
     }
-    hop_start();
+    // hop_start();
+    //  int start_error = esb_link_role_start();
+    // // hop_start();
+    // return start_error;
     return 0;
 }
 
@@ -268,6 +273,6 @@ int esb_link_set_enabled(bool enabled) {
         return 0;
     }
     int start_error = esb_link_role_start();
-    hop_start();
+    // hop_start();
     return start_error;
 }
