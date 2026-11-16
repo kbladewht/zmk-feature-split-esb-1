@@ -14,23 +14,19 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/__assert.h>
 
-#include <zmk/endpoints.h>
 #include <zmk/events/battery_state_changed.h>
 #include <zmk/events/split_esb_peripheral_changed.h>
-#include <zmk/hid.h>
 #include <zmk/pointing/input_split.h>
 #include <zmk/split/transport/central.h>
 #include <zmk/split/transport/types.h>
 
 #include "esb_keepalive.h"
+#include "esb_hid_direct.h"
 #include "esb_link.h"
 #include "esb_link_internal.h"
 #include "esb_wire.h"
 
 LOG_MODULE_DECLARE(zmk_split_esb, CONFIG_ZMK_SPLIT_ESB_LOG_LEVEL);
-
-BUILD_ASSERT(sizeof(struct zmk_hid_keyboard_report_body) == 8,
-             "legacy HID pass-through requires an 8-byte keyboard report");
 
 // BUILD_ASSERT(sizeof(struct zmk_split_transport_peripheral_event) <= CONFIG_ZMK_SPLIT_ESB_MAX_PAYLOAD,
 //              "peripheral event does not fit in one ESB payload; raise ZMK_SPLIT_ESB_MAX_PAYLOAD");
@@ -314,13 +310,7 @@ static void central_on_rx(uint8_t pipe, const uint8_t *data, size_t length) {
         k_work_submit(&central_event_work);
         return;
     }
-    if (length == sizeof(struct zmk_hid_keyboard_report_body)) {
-        struct zmk_hid_keyboard_report *report = zmk_hid_get_keyboard_report();
-        memcpy(&report->body, data, sizeof(report->body));
-        int err = zmk_endpoint_send_report(HID_USAGE_KEY);
-        if (err) {
-            LOG_ERR("Failed to forward legacy HID report: %d", err);
-        }
+    if (esb_hid_direct_handle(pipe, data, length)) {
         return;
     }
     /* One packet may carry several coalesced events.
