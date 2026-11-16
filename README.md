@@ -1,6 +1,6 @@
 # zmk-feature-split-esb
 
-Enhanced ShockBurst (2.4 GHz) split transport for ZMK. One or more peripherals, one central.
+Enhanced ShockBurst (2.4 GHz) split transport for ZMK. Two peripherals, one central.
 Packet-native: split messages map to ESB packets (a report's input events
 coalesce into one, each packed to a compact on-air form), carried over a
 lock-free SPSC RX path.
@@ -55,53 +55,6 @@ central and every peripheral. BASE0 is `E7 E7 E7 E7` for pipe 0; BASE1 is
 0 dBm, 3 retransmissions at 600 us, fast ramp-up off, CRC-16, and 2 Mbps.
 These repeated-byte addresses may sync poorly. Two examples, by peripheral
 count and what each sources.
-
-### One peripheral: a mouse
-
-Pointer motion: input events, routed by one `zmk,input-split` per pipe.
-
-Shared (`esb_shared.dtsi`), every device:
-```dts
-/ {
-    esb_link {
-        compatible = "zmk,split-esb";
-        peripherals {
-            mouse: peripheral_mouse {
-                pipe = <0>;
-                weight = <1>;
-            };
-        };
-    };
-
-    split_inputs {
-        #address-cells = <1>;
-        #size-cells = <0>;
-        mouse_split: mouse_split@0 {
-            compatible = "zmk,input-split";
-            reg = <0>;
-        };
-    };
-
-    mouse_listener: mouse_listener {
-        compatible = "zmk,input-listener";
-        status = "disabled";
-        device = <&mouse_split>;
-    };
-};
-```
-Dongle (central): enable listener.
-```dts
-#include "esb_shared.dtsi"
-&mouse_listener { status = "okay"; };
-```
-Mouse (peripheral): claim pipe, bind sensor.
-```dts
-#include "esb_shared.dtsi"
-/ { chosen { zmk,esb-self = &mouse; }; };
-&mouse_split { device = <&your_sensor>; };
-```
-Two mice, same shape: second child, second `mouse_split@1` and listener. Each mouse
-binds its own split, disables the others.
 
 ### Two peripherals: a split keyboard
 
