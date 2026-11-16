@@ -18,6 +18,14 @@ config ZMK_SPLIT_ESB_MAX_PAYLOAD
     help
       Must be >= the largest split message struct. A build assert checks this.
 
+config ZMK_SPLIT_ESB_HOPPING
+    bool "Enable adaptive ESB channel hopping"
+    default n
+    help
+      Enable adaptive channel selection and recovery scanning. Set this on both
+      the central and peripherals. When disabled, the link stays on its existing
+      fixed RF channel while peripheral keepalives continue normally.
+
 config ZMK_SPLIT_ESB_RX_QUEUE_SIZE
     int "Received-packet ring depth (power of 2)"
     default 16

@@ -252,10 +252,7 @@ int esb_link_init(esb_link_rx_callback_t callback) {
     if (error) {
         return error;
     }
-    // hop_start();
-    //  int start_error = esb_link_role_start();
-    // // hop_start();
-    // return start_error;
+    hop_start();
     return 0;
 }
 
@@ -273,6 +270,8 @@ int esb_link_set_enabled(bool enabled) {
         return 0;
     }
     int start_error = esb_link_role_start();
-    // hop_start();
+    if (!start_error) {
+        hop_start();
+    }
     return start_error;
 }

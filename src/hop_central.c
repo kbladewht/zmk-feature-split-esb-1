@@ -306,9 +306,6 @@ static void decision_work_fn(struct k_work *work) {
     uint32_t active = (uint32_t)atomic_set(&pipe_active_mask, 0);
 
     if (in_anchor_visit) {
-        /* Elapsed window sat on the anchor, not the live channel.
-         * Don't score it or fault served pipes for the gap.
-         * A lost pipe heard here has rejoined. */
         in_anchor_visit = false;
         apply_hop_channel();
         clear_silence_for_heard(heard);
@@ -316,17 +313,20 @@ static void decision_work_fn(struct k_work *work) {
         return;
     }
 
-    hop_policy_accrue_loss(pipe_loss, PERIPHERAL_COUNT, motion, active, pipe_rssi_dbm, rssi_floor_dbm);
+    hop_policy_accrue_loss(pipe_loss, PERIPHERAL_COUNT, motion, active, pipe_rssi_dbm,
+                           rssi_floor_dbm);
     LOG_DBG("hop: heard=%02x motion=%02x active=%02x", (unsigned)heard, (unsigned)motion,
             (unsigned)active);
     score_current_channel(motion, active);
     recompute_mask();
+
     uint32_t rejoining = 0;
     for (uint8_t pipe = 0; pipe < PERIPHERAL_COUNT; pipe++) {
         if ((heard & BIT(pipe)) && pipe_needs_rendezvous(pipe)) {
             rejoining |= BIT(pipe);
         }
     }
+
     update_pipe_silence(heard);
     if (heard != 0) {
         silent_windows = 0;
@@ -340,6 +340,7 @@ static void decision_work_fn(struct k_work *work) {
     if (hop_policy_hop_vote(pipe_loss, pipe_weights, PERIPHERAL_COUNT, vote_threshold)) {
         hop_to_next_epoch();
     }
+
     uint16_t next_ms = decision_ms;
     if (silent_windows >= ANCHOR_FALLBACK_WINDOWS && silent_escapes < SILENT_ESCAPE_LIMIT) {
         silent_escapes++;
@@ -370,6 +371,12 @@ static void decision_work_fn(struct k_work *work) {
 }
 
 void hop_start(void) {
+    if (!IS_ENABLED(CONFIG_ZMK_SPLIT_ESB_HOPPING)) {
+        return;
+    }
+    ensure_mask();
+    hop_index = hop_policy_channel_for_epoch_masked(hop_epoch, active_mask, HOP_COUNT);
+    apply_hop_channel();
     if (HOP_COUNT <= 1) {
         return;
     }

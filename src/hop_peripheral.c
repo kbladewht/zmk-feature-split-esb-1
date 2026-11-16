@@ -73,7 +73,7 @@ static void keepalive_work_fn(struct k_work *work);
 static struct k_work_delayable keepalive_work = Z_WORK_DELAYABLE_INITIALIZER(keepalive_work_fn);
 static void keepalive_work_fn(struct k_work *work) {
     ARG_UNUSED(work);
-    if (HOP_COUNT > 1) {
+    if (IS_ENABLED(CONFIG_ZMK_SPLIT_ESB_HOPPING) && HOP_COUNT > 1) {
         ensure_mask();
         uint8_t epoch = (uint8_t)atomic_get(&beacon_epoch);
         if (epoch != adopted_epoch) {
@@ -125,6 +125,11 @@ static void keepalive_work_fn(struct k_work *work) {
 }
 
 void hop_start(void) {
+    if (IS_ENABLED(CONFIG_ZMK_SPLIT_ESB_HOPPING)) {
+        ensure_mask();
+        hop_index = hop_policy_channel_for_epoch_masked(adopted_epoch, active_mask, HOP_COUNT);
+        apply_hop_channel();
+    }
     k_work_reschedule(&keepalive_work, K_MSEC(hop_window_ms));
 }
 

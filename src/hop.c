@@ -24,7 +24,7 @@ uint8_t hop_index;
 /* Retune with the ISR masked: esb_stop_rx() briefly nulls the radio disabled-callback,
  * and a DISABLED event landing there mid-reconfigure faults the device.
  * Skip the work when the channel is unchanged, so a redundant retune never tears down RX. */
-static uint8_t applied_index;
+static uint8_t applied_index = UINT8_MAX;
 void apply_channel_index(uint8_t index) {
     if (index == applied_index) {
         return;
@@ -44,7 +44,9 @@ void apply_channel_index(uint8_t index) {
 }
 
 void apply_hop_channel(void) {
-    apply_channel_index(hop_index);
+    if (IS_ENABLED(CONFIG_ZMK_SPLIT_ESB_HOPPING)) {
+        apply_channel_index(hop_index);
+    }
 }
 
 uint8_t hop_current_channel(void) {
